@@ -1,0 +1,43 @@
+services:
+  elasticsearch:
+    image: elasticsearch:9.0.3
+    container_name: elasticsearch_service
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    # networks:
+    #   - dokploy-network
+    restart: unless-stopped
+
+  # chatbot_api:
+  #   build: .
+  #   container_name: chatbot_api
+  #   environment:
+  #     - ELASTIC_HOST=http://elasticsearch_service:9200
+  #   depends_on:
+  #     - elasticsearch
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.chatbot_api.rule=Host(`chatbothm.doiquanai.vn`)"
+  #     # Bạn cần đảm bảo Traefik trên dokploy có entrypoint tên là 'web'
+  #     - "traefik.http.routers.chatbot_api.entrypoints=web"
+  #     - "traefik.http.services.chatbot_api.loadbalancer.server.port=8008"
+  #     # Chỉ định rõ mạng cho Traefik
+  #     - "traefik.docker.network=dokploy-network"
+  #   networks:
+  #     - dokploy-network
+  #   restart: unless-stopped
+
+volumes:
+  esdata:
+    name: chatbot_esdata
+    external: true
+
+# networks:
+#   dokploy-network:
+#     external: true

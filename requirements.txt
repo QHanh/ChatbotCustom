@@ -1,0 +1,23 @@
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+SQLAlchemy
+psycopg2-binary
+
+# Elasticsearch
+elasticsearch
+aiohttp
+
+# LLM & AI
+google-generativeai
+openai
+
+# Data Handling & Utils
+pandas
+openpyxl
+requests
+python-dotenv
+pillow
+streamlit
