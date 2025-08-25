@@ -17,7 +17,8 @@ def generate_llm_response(
     wants_images: bool = False,
     is_image_search: bool = False,
     db: Session = None,
-    customer_id: str = None
+    customer_id: str = None,
+    api_key: str = None
 ) -> str:
     """
     Tạo prompt và gọi đến LLM để sinh câu trả lời.
@@ -61,14 +62,14 @@ def generate_llm_response(
     llm_response = None
     try:
         if model_choice == "gemini":
-            model = get_gemini_model()
+            model = get_gemini_model(api_key=api_key)
             if model:
                 response = model.generate_content(prompt, safety_settings={'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE'})
                 llm_response = response.text.strip()
         elif model_choice == "lmstudio":
             llm_response = get_lmstudio_response(prompt)
         elif model_choice == "openai":
-            openai = get_openai_model()
+            openai = get_openai_model(api_key=api_key)
             if not openai:
                 return {"answer": "Không tìm thấy OpenAI API key.", "product_images": []} if wants_images else "Không tìm thấy OpenAI API key."
             response = openai.chat.completions.create(
@@ -362,7 +363,7 @@ def _get_fallback_response(search_results: List[Dict], needs_product_search: boo
     else:
         return "Dạ, em xin lỗi, em không hiểu rõ câu hỏi của anh/chị. Anh/chị có thể hỏi lại không ạ?"
     
-def evaluate_and_choose_product(user_query: str, history_text: str, product_candidates: List[Dict], model_choice: str = "gemini") -> Dict:
+def evaluate_and_choose_product(user_query: str, history_text: str, product_candidates: List[Dict], model_choice: str = "gemini", api_key: str = None) -> Dict:
     """
     Sử dụng một lệnh gọi AI duy nhất để vừa đánh giá độ cụ thể của yêu cầu,
     vừa chọn ra sản phẩm phù hợp nhất nếu có thể.
@@ -421,7 +422,7 @@ def evaluate_and_choose_product(user_query: str, history_text: str, product_cand
     """
 
     try:
-        model = get_gemini_model()
+        model = get_gemini_model(api_key=api_key)
         if model:
             response = model.generate_content(prompt)
             json_text = re.search(r'\{.*\}', response.text, re.DOTALL).group(0)
@@ -449,7 +450,7 @@ def evaluate_and_choose_product(user_query: str, history_text: str, product_cand
     # Fallback an toàn
     return {'type': 'NO_MATCH', 'score': 0.0, 'product': None, 'reason': None}
 
-def evaluate_purchase_confirmation(user_query: str, history_text: str, model_choice: str = "gemini") -> Dict:
+def evaluate_purchase_confirmation(user_query: str, history_text: str, model_choice: str = "gemini", api_key: str = None) -> Dict:
     """
     Sử dụng AI để đánh giá phản hồi của khách hàng khi được hỏi xác nhận đơn hàng.
     Trả về một dictionary: {'decision': 'CONFIRM'/'CANCEL'/'UNCLEAR'}
@@ -478,7 +479,7 @@ def evaluate_purchase_confirmation(user_query: str, history_text: str, model_cho
     """
 
     try:
-        model = get_gemini_model()
+        model = get_gemini_model(api_key=api_key)
         if model:
             from google.generativeai.types import GenerationConfig
             generation_config = GenerationConfig(response_mime_type="application/json")
@@ -499,7 +500,7 @@ def evaluate_purchase_confirmation(user_query: str, history_text: str, model_cho
         print(f"Lỗi khi AI đánh giá xác nhận đơn hàng: {e}")
         return {'decision': 'UNCLEAR'}
 
-def filter_products_with_ai(user_query: str, history_text: str, product_candidates: List[Dict]) -> List[Dict]:
+def filter_products_with_ai(user_query: str, history_text: str, product_candidates: List[Dict], api_key: str = None) -> List[Dict]:
     """
     Sử dụng AI để lọc và chọn ra những sản phẩm phù hợp nhất từ danh sách tìm kiếm.
     """
@@ -551,7 +552,7 @@ def filter_products_with_ai(user_query: str, history_text: str, product_candidat
     """
 
     try:
-        model = get_gemini_model()
+        model = get_gemini_model(api_key=api_key)
         if model:
             from google.generativeai.types import GenerationConfig
             generation_config = GenerationConfig(response_mime_type="application/json")

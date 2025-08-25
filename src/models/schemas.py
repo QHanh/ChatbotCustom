@@ -5,6 +5,7 @@ class ChatRequest(BaseModel):
     message: str
     model_choice: Literal["gemini", "lmstudio", "openai"] = "gemini"
     image_url: Optional[str] = None
+    api_key: Optional[str] = None
 
 class ControlBotRequest(BaseModel):
     command: str = Field(..., description="Lệnh điều khiển bot, ví dụ: 'start', 'stop'")
@@ -38,7 +39,7 @@ class ChatResponse(BaseModel):
     customer_info: Optional[CustomerInfo] = None
     human_handover_required: Optional[bool] = False
     has_negativity: Optional[bool] = False
-    # action_data: Optional[Action] = None
+    action_data: Optional[Action] = None
 
 class QueryExtraction(BaseModel):
     product_name: str

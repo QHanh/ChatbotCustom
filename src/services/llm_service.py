@@ -4,15 +4,16 @@ from src.config.settings import GEMINI_API_KEY, LMSTUDIO_API_URL, LMSTUDIO_MODEL
 from typing import Optional
 import io
 from PIL import Image
+from fastapi import UploadFile
 
-def get_gemini_model(is_vision: bool = False):
+def get_gemini_model(is_vision: bool = False, api_key: str = None):
     """Khởi tạo và trả về model Gemini."""
-    if not GEMINI_API_KEY:
+    if not api_key:
         print("Không tìm thấy GEMINI_API_KEY.")
         return None
     try:
         import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
+        genai.configure(api_key=api_key)
         if is_vision:
             model = genai.GenerativeModel('gemini-2.0-flash')
         else:
@@ -46,20 +47,24 @@ def get_lmstudio_response(prompt: str):
         print(f"Lỗi khi gọi LM Studio: {e}")
         return None
 
-def analyze_image_with_vision(image_url: str) -> Optional[str]:
+def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, api_key: str = None) -> Optional[str]:
     """
     Sử dụng Gemini Pro Vision để phân tích và mô tả nội dung của một hình ảnh.
     """
     try:
-        model = get_gemini_model(is_vision=True)
+        model = get_gemini_model(is_vision=True, api_key=api_key)
         if not model:
             print("Không thể khởi tạo model Gemini Vision.")
             return None
 
-        print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
-        response = requests.get(image_url, timeout=15)
-        response.raise_for_status()
-        image_bytes = response.content
+        if not image_bytes and image_url:
+            print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
+            response = requests.get(image_url, timeout=15)
+            response.raise_for_status()
+            image_bytes = response.content
+        
+        if not image_bytes:
+            return None
         
         image = Image.open(io.BytesIO(image_bytes))
 
@@ -75,13 +80,13 @@ def analyze_image_with_vision(image_url: str) -> Optional[str]:
         print(f"Lỗi trong quá trình phân tích ảnh bằng AI Vision: {e}")
         return None
 
-def get_openai_model():
+def get_openai_model(api_key: str = None):
     """Khởi tạo và trả về client openai chuẩn >=1.0.0, hoặc None nếu thiếu key."""
     try:
         import openai
-        if not OPENAI_API_KEY:
+        if not api_key:
             return None
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        client = openai.OpenAI(api_key=api_key)
         return client
     except Exception as e:
         print(f"Lỗi khi khởi tạo OpenAI client: {e}")

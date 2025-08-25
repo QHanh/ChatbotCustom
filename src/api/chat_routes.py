@@ -1,5 +1,5 @@
-from fastapi import HTTPException, Path
-from typing import Dict, Any, List, Set
+from fastapi import HTTPException, UploadFile, Path
+from typing import Dict, Any, List, Set, Optional
 import threading
 import io
 import requests
@@ -29,16 +29,28 @@ def _get_product_key(product: Dict) -> str:
     """Tạo một key định danh duy nhất cho sản phẩm."""
     return f"{product.get('product_name', '')}::{product.get('properties', '')}"
 
-async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str = "default", db: Session = None) -> ChatResponse:
+async def chat_endpoint(
+    customer_id: str,
+    session_id: str,
+    db: Session,
+    message: str,
+    model_choice: str,
+    api_key: str,
+    image_url: Optional[str] = None,
+    image: Optional[UploadFile] = None
+) -> ChatResponse:
     with bot_state_lock:
         if not bot_running:
             return ChatResponse(reply="", history=[], human_handover_required=False)
     
-    user_query = request.message
-    model_choice = request.model_choice
-    image_url = request.image_url
-
-    if not user_query and not image_url:
+    user_query = message
+    model_choice = model_choice
+    image_url = image_url
+    api_key = api_key
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Bạn chưa cung cấp API key")
+    
+    if not user_query and not image_url and not image:
         raise HTTPException(status_code=400, detail="Không có tin nhắn hoặc hình ảnh nào được gửi")
 
     sanitized_customer_id = sanitize_for_es(customer_id)
@@ -74,11 +86,31 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
         return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
  
     API_ENDPOINT = "https://embed.doiquanai.vn/embed"
-    if image_url:
-        print(f"Phát hiện hình ảnh từ URL: {image_url}, bắt đầu xử lý...")
+    if image_url or image:
+        print(f"Phát hiện hình ảnh, bắt đầu xử lý...")
+        embedding_vector = None
         try:
-            response = requests.post(API_ENDPOINT, data={"image_url": image_url}, timeout=15)
-            response.raise_for_status()
+            if image_url:
+                print(f" -> Tải ảnh từ URL: {image_url}")
+                response = requests.post(API_ENDPOINT, data={"image_url": image_url}, timeout=15)
+                response.raise_for_status()
+            else: # image is present
+                print(f" -> Tải ảnh từ file: {image.filename}")
+                image_bytes = await image.read()
+                content_type = image.content_type or "image/png"
+                filename = image.filename or "image.png"
+
+                files = {
+                    "file": (filename, image_bytes, content_type)
+                }
+                response = requests.post(
+                    API_ENDPOINT,
+                    files=files,
+                    timeout=15
+                )
+                response.raise_for_status()
+
+
             result = response.json()
 
             if "embedding" in result:
@@ -87,37 +119,40 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
             else:
                 print(" -> Lỗi từ API:", result.get("error", "Không rõ lỗi"))
 
-            retrieved_data = search_products_by_image(embedding_vector)
-            if retrieved_data:
-                if not user_query:
-                    user_query = "Ảnh này là sản phẩm gì vậy shop?"
+            if embedding_vector:
+                retrieved_data = search_products_by_image(sanitized_customer_id, embedding_vector)
+                if retrieved_data:
+                    if not user_query:
+                        user_query = "Ảnh này là sản phẩm gì vậy shop?"
 
-                response_text = generate_llm_response(
-                    user_query=user_query,
-                    search_results=retrieved_data,
-                    history=history,
-                    model_choice=model_choice,
-                    is_image_search=True
-                )
-                
-                _update_chat_history(session_id, user_query, response_text, session_data)
-                return ChatResponse(reply=response_text, history=chat_history[session_id]["messages"].copy(), human_handover_required=False)
+                    response_text = generate_llm_response(
+                        user_query=user_query,
+                        search_results=retrieved_data,
+                        history=history,
+                        model_choice=model_choice,
+                        is_image_search=True,
+                        api_key=api_key
+                    )
+                    
+                    _update_chat_history(composite_session_id, user_query, response_text, session_data)
+                    return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
+
+            print(" -> Không tìm thấy sản phẩm qua embedding, thử phân tích bằng AI Vision...")
+            image_bytes_for_vision = image_bytes
+            image_description = analyze_image_with_vision(image_url=image_url, image_bytes=image_bytes_for_vision, api_key=api_key)
+            if image_description:
+                user_query = image_description
+                print(f" -> AI Vision mô tả: {user_query}")
             else:
-                print(" -> Không tìm thấy sản phẩm, thử phân tích bằng AI Vision...")
-                image_description = analyze_image_with_vision(image_url)
-                if image_description:
-                    user_query = image_description
-                    print(f" -> AI Vision mô tả: {user_query}")
-                else:
-                    response_text = "Dạ, em chưa nhận ra sản phẩm hoặc nội dung trong ảnh ạ. Anh/chị có thể cho em thêm thông tin được không?"
-                    _update_chat_history(session_id, user_query, response_text, session_data)
-                    return ChatResponse(reply=response_text, history=chat_history[session_id]["messages"].copy())
+                response_text = "Dạ, em chưa nhận ra sản phẩm hoặc nội dung trong ảnh ạ. Anh/chị có thể cho em thêm thông tin được không?"
+                _update_chat_history(composite_session_id, user_query, response_text, session_data)
+                return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy())
 
         except Exception as e:
             print(f"Lỗi nghiêm trọng trong luồng xử lý ảnh: {e}")
             return ChatResponse(reply="Dạ, em xin lỗi, em chưa xem được hình ảnh của mình ạ.", history=history)
     
-    analysis_result = analyze_intent_and_extract_entities(user_query, history, model_choice)
+    analysis_result = analyze_intent_and_extract_entities(user_query, history, model_choice, api_key=api_key)
 
     asking_for_more = is_asking_for_more(user_query)
 
@@ -133,7 +168,7 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
 
     if session_data.get("state") == "awaiting_purchase_confirmation":
         history_text = format_history_text(history, limit=4)
-        evaluation = evaluate_purchase_confirmation(user_query, history_text, model_choice)
+        evaluation = evaluate_purchase_confirmation(user_query, history_text, model_choice, api_key=api_key)
         decision = evaluation.get("decision")
         if decision == "CONFIRM":
             collected_info = session_data.get("collected_customer_info", {})
@@ -216,7 +251,7 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
                 return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy())
         else:
             current_info = session_data.get("collected_customer_info", {})
-            extracted_info = extract_customer_info(user_query, model_choice)
+            extracted_info = extract_customer_info(user_query, model_choice, api_key=api_key)
 
             for key, value in extracted_info.items():
                 if value and not current_info.get(key):
@@ -454,7 +489,7 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
                         if not found_products and page > 0: break
 
                         current_evaluation = evaluate_and_choose_product(
-                            query_for_evaluation, history_text, found_products, model_choice
+                            query_for_evaluation, history_text, found_products, model_choice, api_key=api_key
                         )
 
                         if current_evaluation.get("type") == "PERFECT_MATCH":
@@ -562,24 +597,24 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
 
     elif asking_for_more and session_data.get("last_query"):
         response_text, retrieved_data, product_images = _handle_more_products(
-            customer_id, user_query, session_data, history, model_choice, analysis_result, db
+            customer_id, user_query, session_data, history, model_choice, analysis_result, db, api_key=api_key
         )
     else:
         session_data["shown_product_keys"] = set()
         response_text, retrieved_data, product_images = _handle_new_query(
-            customer_id, user_query, session_data, history, model_choice, analysis_result, db
+            customer_id, user_query, session_data, history, model_choice, analysis_result, db, api_key=api_key
         )
 
     _update_chat_history(composite_session_id, user_query, response_text, session_data)
     images = _process_images(analysis_result.get("wants_images", False), retrieved_data, product_images)
 
-    # action_data = None
-    # is_general_query = not analysis_result.get("is_purchase_intent") and session_data.get("state") is None
-    # if is_general_query and len(retrieved_data) == 1:
-    #     product = retrieved_data[0]
-    #     product_link = product.get("link_product")
-    #     if product_link and isinstance(product_link, str) and product_link.startswith("http"):
-    #         action_data = {"action": "redirect", "url": product_link}
+    action_data = None
+    is_general_query = not analysis_result.get("is_purchase_intent") and session_data.get("state") is None
+    if is_general_query and len(retrieved_data) == 1:
+        product = retrieved_data[0]
+        product_link = product.get("link_product")
+        if product_link and isinstance(product_link, str) and product_link.startswith("http"):
+            action_data = {"action": "redirect", "url": product_link}
 
 
     return ChatResponse(
@@ -590,7 +625,7 @@ async def chat_endpoint(request: ChatRequest, customer_id: str, session_id: str 
         has_purchase=analysis_result.get("is_purchase_intent", False),
         human_handover_required=analysis_result.get("human_handover_required", False),
         has_negativity=False,
-        # action_data=action_data
+        action_data=action_data
     )
 
 async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, session_id: str):
@@ -666,7 +701,7 @@ async def human_chatting_endpoint(customer_id: str, session_id: str):
         chat_history[composite_session_id]["handover_timestamp"] = time.time()
         return {"status": "success", "message": message}
  
-def _handle_more_products(customer_id: str, user_query: str, session_data: dict, history: list, model_choice: str, analysis: dict, db: Session):
+def _handle_more_products(customer_id: str, user_query: str, session_data: dict, history: list, model_choice: str, analysis: dict, db: Session, api_key: str = None):
     last_query = session_data["last_query"]
     new_offset = session_data["offset"] + PAGE_SIZE
     sanitized_customer_id = sanitize_for_es(customer_id)
@@ -681,7 +716,7 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
     )
 
     history_text = format_history_text(history, limit=5)
-    retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data)
+    retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data, api_key=api_key)
     
     shown_keys = session_data["shown_product_keys"]
     new_products = [p for p in retrieved_data if _get_product_key(p) not in shown_keys]
@@ -697,7 +732,7 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
         shown_keys.add(_get_product_key(p))
 
     result = generate_llm_response(
-        user_query, new_products, history, analysis["wants_specs"], model_choice, True, analysis["wants_images"], db=db, customer_id=customer_id
+        user_query, new_products, history, analysis["wants_specs"], model_choice, True, analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key
     )
     
     product_images = []
@@ -713,7 +748,7 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
     session_data["shown_product_keys"] = shown_keys
     return response_text, new_products, product_images
 
-def _handle_new_query(customer_id: str, user_query: str, session_data: dict, history: list, model_choice: str, analysis: dict, db: Session):
+def _handle_new_query(customer_id: str, user_query: str, session_data: dict, history: list, model_choice: str, analysis: dict, db: Session, api_key: str = None):
     retrieved_data = []
     product_images = []
     sanitized_customer_id = sanitize_for_es(customer_id)
@@ -736,7 +771,7 @@ def _handle_new_query(customer_id: str, user_query: str, session_data: dict, his
             )
 
             history_text = format_history_text(history, limit=5)
-            retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data)
+            retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data, api_key=api_key)
 
             session_data["last_query"] = {
                 "product_name": product_name_to_search,
@@ -752,7 +787,7 @@ def _handle_new_query(customer_id: str, user_query: str, session_data: dict, his
 
 
     result = generate_llm_response(
-        user_query, retrieved_data, history, analysis["wants_specs"], model_choice, analysis["needs_search"], analysis["wants_images"], db=db, customer_id=customer_id
+        user_query, retrieved_data, history, analysis["wants_specs"], model_choice, analysis["needs_search"], analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key
     )
     
     if analysis["wants_images"] and isinstance(result, dict):

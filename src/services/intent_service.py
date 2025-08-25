@@ -5,7 +5,7 @@ from typing import Dict, Any
 from src.services.llm_service import get_gemini_model, get_lmstudio_response, get_openai_model
 from google.generativeai.types import GenerationConfig
 
-def analyze_intent_and_extract_entities(user_query: str, history: list = None, model_choice: str = "gemini") -> Dict[str, Any]:
+def analyze_intent_and_extract_entities(user_query: str, history: list = None, model_choice: str = "gemini", api_key: str = None) -> Dict[str, Any]:
     """
     Sử dụng một lệnh gọi LLM duy nhất để phân tích ý định của người dùng và trích xuất các thực thể cần thiết.
     """
@@ -130,7 +130,7 @@ def analyze_intent_and_extract_entities(user_query: str, history: list = None, m
     response_text = None
     try:
         if model_choice == "gemini":
-            model = get_gemini_model()
+            model = get_gemini_model(api_key=api_key)
             if model:
                 generation_config = GenerationConfig(response_mime_type="application/json")
                 response = model.generate_content(prompt, generation_config=generation_config)
@@ -138,7 +138,7 @@ def analyze_intent_and_extract_entities(user_query: str, history: list = None, m
         elif model_choice == "lmstudio":
             response_text = get_lmstudio_response(prompt)
         elif model_choice == "openai":
-            openai = get_openai_model()
+            openai = get_openai_model(api_key=api_key)
             if openai:
                 completion = openai.chat.completions.create(
                     model="gpt-4o-mini",
@@ -172,7 +172,7 @@ def analyze_intent_and_extract_entities(user_query: str, history: list = None, m
         print(f"Lỗi trong quá trình phân tích ý định bằng LLM ({model_choice}): {e}")
         return fallback_response
     
-def extract_customer_info(user_input: str, model_choice: str = "gemini") -> Dict:
+def extract_customer_info(user_input: str, model_choice: str = "gemini", api_key: str = None) -> Dict:
     """
     Sử dụng LLM để bóc tách Tên, SĐT, Địa chỉ từ một chuỗi văn bản.
     """
@@ -186,7 +186,7 @@ def extract_customer_info(user_input: str, model_choice: str = "gemini") -> Dict
     JSON:
     """
     try:
-        model = get_gemini_model()
+        model = get_gemini_model(api_key=api_key)
         if model:
             response = model.generate_content(prompt)
             json_text = re.search(r'\{.*\}', response.text, re.DOTALL).group(0)

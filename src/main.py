@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, Form, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import threading
 import time
@@ -66,20 +66,39 @@ async def startup_event():
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
 
-@app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot")
+@app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(
     customer_id: str,
-    request: ChatRequest, 
-    session_id: str = Query("default", description="ID phiên chat"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    message: str = Form(""),
+    model_choice: str = Form("gemini"),
+    api_key: str = Form(...),
+    session_id: str = Form("default", description="ID phiên chat"),
+    image_url: str = Form(None, description="URL của hình ảnh (nếu có)"),
+    image: UploadFile = File(None, description="File hình ảnh tải lên (nếu có)")
 ):
     """
-    Endpoint chính để tương tác với chatbot.
+    Endpoint chính để tương tác với chatbot. Hỗ trợ cả văn bản, URL ảnh và tải lên file ảnh.
     - **customer_id**: Mã của khách hàng (cửa hàng).
     - **message**: Câu hỏi của người dùng.
-    - **session_id**: ID phiên chat (mặc định là 'default')
+    - **session_id**: ID phiên chat.
+    - **api_key**: Gemini API Key.
+    - **image_url**: (Tùy chọn) Gửi URL của ảnh.
+    - **image**: (Tùy chọn) Tải lên file ảnh.
     """
-    return await chat_endpoint(request, customer_id, session_id, db)
+    if image_url and image:
+        raise HTTPException(status_code=400, detail="Chỉ có thể cung cấp image_url hoặc tải lên file ảnh, không phải cả hai.")
+        
+    return await chat_endpoint(
+        customer_id=customer_id,
+        session_id=session_id,
+        db=db,
+        message=message,
+        model_choice=model_choice,
+        api_key=api_key,
+        image_url=image_url,
+        image=image
+    )
 
 @app.post("/control-bot/{customer_id}", summary="Dừng hoặc tiếp tục bot cho một session")
 async def control_bot(
