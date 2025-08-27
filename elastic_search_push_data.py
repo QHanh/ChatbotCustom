@@ -262,3 +262,30 @@ async def process_and_upsert_file_data(
         id_field=columns_config['id_field']
     )
     return success, failed
+
+async def delete_documents_by_customer(
+    es_client: Elasticsearch, 
+    index_name: str, 
+    customer_id: str
+) -> dict:
+    """
+    Xóa tất cả các document của một customer_id cụ thể khỏi một index.
+    """
+    query = {
+        "query": {
+            "term": {
+                "customer_id": customer_id
+            }
+        }
+    }
+    try:
+        response = await es_client.delete_by_query(
+            index=index_name,
+            body=query,
+            refresh=True,
+            routing=customer_id
+        )
+        return response.body
+    except Exception as e:
+        print(f"Lỗi khi xóa document cho customer_id '{customer_id}' trong index '{index_name}': {e}")
+        raise

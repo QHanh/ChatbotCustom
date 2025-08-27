@@ -1,12 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Literal, Optional
 
-class ChatRequest(BaseModel):
-    message: str
-    model_choice: Literal["gemini", "lmstudio", "openai"] = "gemini"
-    image_url: Optional[str] = None
-    api_key: Optional[str] = None
-
 class ControlBotRequest(BaseModel):
     command: str = Field(..., description="Lệnh điều khiển bot, ví dụ: 'start', 'stop'")
 

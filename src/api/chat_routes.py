@@ -7,7 +7,7 @@ from PIL import Image
 import google.generativeai as genai
 from collections import defaultdict
 
-from src.models.schemas import ChatRequest, ChatResponse, ImageInfo, PurchaseItem, CustomerInfo, ControlBotRequest
+from src.models.schemas import ChatResponse, ImageInfo, PurchaseItem, CustomerInfo, ControlBotRequest
 from src.services.intent_service import analyze_intent_and_extract_entities, extract_customer_info
 from src.services.search_service import search_products, search_products_by_image
 from src.services.response_service import generate_llm_response
@@ -54,7 +54,7 @@ async def chat_endpoint(
         raise HTTPException(status_code=400, detail="Không có tin nhắn hoặc hình ảnh nào được gửi")
 
     sanitized_customer_id = sanitize_for_es(customer_id)
-    composite_session_id = f"{sanitized_customer_id}-{session_id}"
+    composite_session_id = f"{sanitized_customer_id}_{session_id}"
 
     with chat_history_lock:
         session_data = chat_history.get(composite_session_id, {

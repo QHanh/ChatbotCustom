@@ -4,7 +4,7 @@ import threading
 import time
 
 from src.config.settings import APP_CONFIG, CORS_CONFIG
-from src.models.schemas import ChatRequest, ControlBotRequest
+from src.models.schemas import ControlBotRequest
 from src.api.chat_routes import chat_endpoint, chat_history, chat_history_lock, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint
 from dependencies import init_es_client, close_es_client, get_db
 from contextlib import asynccontextmanager

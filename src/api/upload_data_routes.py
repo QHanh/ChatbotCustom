@@ -9,7 +9,8 @@ from elastic_search_push_data import (
     update_single_document,
     delete_single_document,
     bulk_index_documents,
-    process_and_upsert_file_data
+    process_and_upsert_file_data,
+    delete_documents_by_customer
 )
 from src.models.schemas import ProductRow
 from src.utils.helpers import sanitize_for_es
@@ -128,6 +129,28 @@ async def delete_product(
         return {"message": "Sản phẩm đã được xóa thành công.", "result": response.body}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/products/{customer_id}")
+async def delete_all_products_by_customer(
+    customer_id: str = Path(..., description="Mã khách hàng để xóa tất cả sản phẩm."),
+    es_client: AsyncElasticsearch = Depends(get_es_client)
+):
+    """
+    Xóa TẤT CẢ các phụ kiện của một khách hàng khỏi index.
+    """
+    if not es_client:
+        raise HTTPException(status_code=503, detail="Không thể kết nối đến Elasticsearch.")
+    try:
+        sanitized_customer_id = sanitize_for_es(customer_id)
+        response = await delete_documents_by_customer(
+            es_client, 
+            PRODUCTS_INDEX, 
+            sanitized_customer_id
+        )
+        deleted_count = response.get('deleted', 0)
+        return {"message": f"Đã xóa thành công {deleted_count} phụ kiện cho khách hàng '{customer_id}'.", "details": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi xóa phụ kiện: {e}")
 
 @router.post("/products/bulk/{customer_id}")
 async def add_products_bulk(
