@@ -49,6 +49,7 @@ class ProductRow(BaseModel):
     category: Optional[str] = None
     properties: Optional[str] = None
     lifecare_price: Optional[float] = None
+    sale_price: Optional[float] = None
     trademark: Optional[str] = None
     guarantee: Optional[str] = None
     inventory: Optional[int] = None
