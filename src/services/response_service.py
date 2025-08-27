@@ -121,7 +121,9 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
             
             price = item.get('lifecare_price', 0)
             price_str = f"{price:,.0f}đ" if price > 0 else "Liên hệ"
-            product_context += f"  Giá: {price_str}\n"
+            sale_price = item.get('sale_price', 0)
+            sale_price_str = f"{sale_price:,.0f}đ" if sale_price > 0 else "Liên hệ"
+            product_context += f"  Giá: {price_str} - Giá buôn: {sale_price_str}\n"
             inventory = item.get('inventory', 0)
             if inventory > 0:
                 product_context += f"  Tình trạng: Còn hàng ({inventory} sản phẩm)\n"
@@ -136,6 +138,7 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
             for item in sorted_items:
                 prop = item.get('properties', 'N/A')
                 price = item.get('lifecare_price', 0)
+                sale_price = item.get('sale_price', 0)
                 inventory = item.get('inventory', 0)
                 price_str = f"{price:,.0f}đ" if price > 0 else "Liên hệ"
                 stock_str = f"Còn hàng ({inventory})" if inventory > 0 else "Hết hàng"
@@ -288,6 +291,7 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
     - **KHÔNG** tự động nói ra số lượng tồn kho chính xác hay tình trạng "Còn hàng". Chỉ nói khi khách hỏi.
     
 9.  **Giá sản phẩm:**
+    - **KHÔNG** được nói giá buôn khi liệt kê sản phẩm trừ khi khách hàng hỏi.
     - **Các sản phẩm có giá là **Liên hệ** thì **KHÔNG ĐƯỢC** nói ra giá, chỉ nói tên sản phẩm KHÔNG KÈM GIÁ.
     - **Các sản phẩm có giá **KHÁC** **Liên hệ** thì hãy luôn nói kèm giá khi liệt kê.
     - **CHỈ KHI** khách hàng hỏi giá của sản phẩm có giá "Liên hệ" thì hãy nói "Sản phẩm này em chưa có giá chính xác, nếu anh/chị muốn mua thì em sẽ xem lại và báo lại cho anh chị một mức giá hợp lý".

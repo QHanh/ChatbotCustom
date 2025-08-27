@@ -20,14 +20,15 @@ router = APIRouter()
 PRODUCT_COLUMNS_CONFIG = {
     'names': [
         'product_code', 'product_name', 'category', 'properties',
-        'lifecare_price', 'trademark', 'guarantee', 'inventory',
+        'lifecare_price', 'sale_price', 'trademark', 'guarantee', 'inventory',
         'specifications', 'avatar_images', 'link_accessory'
     ],
     'required': ['product_code', 'product_name'],
     'id_field': 'product_code',
     'numerics': {
         'inventory': int,
-        'lifecare_price': float
+        'lifecare_price': float,
+        'sale_price': float
     }
 }
 

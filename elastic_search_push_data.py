@@ -24,6 +24,7 @@ def get_shared_index_mapping(data_type: str):
         "category": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
         "properties": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
         "lifecare_price": {"type": "double"},
+        "sale_price": {"type": "double"},
         "trademark": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
         "guarantee": {"type": "text"},
         "inventory": {"type": "integer"},
