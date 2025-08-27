@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Literal, Optional
 
+class BulkDeleteInput(BaseModel):
+    """Input model for bulk delete operations."""
+    ids: List[str] = Field(description="A list of document IDs to delete.")
+
 class ControlBotRequest(BaseModel):
     command: str = Field(..., description="Lệnh điều khiển bot, ví dụ: 'start', 'stop'")
 

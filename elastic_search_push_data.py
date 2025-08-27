@@ -1,11 +1,11 @@
 import pandas as pd
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 import numpy as np
 import warnings
 import io
 from src.utils.helpers import sanitize_for_es
-
+from typing import List, Dict, Any
 warnings.filterwarnings("ignore", category=UserWarning)
 
 PRODUCTS_INDEX = "products_customer"
@@ -288,4 +288,39 @@ async def delete_documents_by_customer(
         return response.body
     except Exception as e:
         print(f"Lỗi khi xóa document cho customer_id '{customer_id}' trong index '{index_name}': {e}")
+        raise
+
+async def bulk_delete_documents(
+    es_client: AsyncElasticsearch,
+    index_name: str,
+    customer_id: str,
+    doc_ids: List[str],
+    id_field: str
+) -> Dict[str, Any]:
+    """
+    Xóa hàng loạt các document từ một index dựa trên danh sách ID.
+    """
+    if not doc_ids:
+        return {"deleted": 0, "failures": []}
+
+    query = {
+        "query": {
+            "bool": {
+                "filter": [
+                    {"term": {"customer_id": customer_id}},
+                    {"term": {id_field: doc_ids}}
+                ]
+            }
+        }
+    }
+    try:
+        response = await es_client.delete_by_query(
+            index=index_name,
+            body=query,
+            refresh=True,
+            routing=customer_id
+        )
+        return response.body
+    except Exception as e:
+        print(f"Lỗi khi xóa hàng loạt document cho customer_id '{customer_id}' trong index '{index_name}': {e}")
         raise
