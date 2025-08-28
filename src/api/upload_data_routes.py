@@ -6,7 +6,6 @@ from elastic_search_push_data import (
     process_and_index_data, 
     PRODUCTS_INDEX,
     index_single_document,
-    update_single_document,
     delete_single_document,
     bulk_index_documents,
     process_and_upsert_file_data,
@@ -105,12 +104,34 @@ async def update_product(
         raise HTTPException(status_code=503, detail="Không thể kết nối đến Elasticsearch.")
     try:
         sanitized_customer_id = sanitize_for_es(customer_id)
-        product_dict = product_data.model_dump(exclude_unset=True)
-        if 'product_code' in product_dict:
-            del product_dict['product_code']
-            
-        response = await update_single_document(es_client, PRODUCTS_INDEX, sanitized_customer_id, product_id, product_dict)
-        return {"message": "Sản phẩm đã được cập nhật thành công.", "result": response.body}
+        product_dict = product_data.model_dump()
+
+        body_product_id = product_dict.get('product_code')
+        if body_product_id and body_product_id != product_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Mã sản phẩm trong URL ({product_id}) và trong body ({body_product_id}) không khớp."
+            )
+        
+        product_dict['product_code'] = product_id
+        
+        response = await index_single_document(
+            es_client, 
+            PRODUCTS_INDEX, 
+            sanitized_customer_id, 
+            product_id, 
+            product_dict
+        )
+        
+        result_status = response.body.get('result')
+        if result_status == 'created':
+            message = "Sản phẩm đã được tạo mới thành công."
+        elif result_status == 'updated':
+            message = "Sản phẩm đã được cập nhật thành công."
+        else:
+            message = "Thao tác hoàn tất."
+
+        return {"message": message, "result": response.body}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

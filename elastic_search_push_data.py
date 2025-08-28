@@ -157,25 +157,6 @@ async def index_single_document(es_client: Elasticsearch, index_name: str, custo
     except Exception as e:
         raise IOError(f"Lỗi khi nạp bản ghi đơn: {e}")
 
-async def update_single_document(es_client: Elasticsearch, index_name: str, customer_id: str, doc_id: str, doc_body: dict):
-    """
-    Cập nhật một bản ghi duy nhất trong index chia sẻ.
-    """
-    sanitized_customer_id = sanitize_for_es(customer_id)
-    sanitized_doc_id = sanitize_for_es(doc_id)
-    composite_id = f"{sanitized_customer_id}_{sanitized_doc_id}"
-    try:
-        response = await es_client.update(
-            index=index_name,
-            id=composite_id,
-            doc=doc_body,
-            routing=sanitized_customer_id,
-            refresh=True
-        )
-        return response
-    except Exception as e:
-        raise IOError(f"Lỗi khi cập nhật bản ghi: {e}")
-
 async def delete_single_document(es_client: Elasticsearch, index_name: str, customer_id: str, doc_id: str):
     """
     Xóa một bản ghi duy nhất khỏi index chia sẻ.
