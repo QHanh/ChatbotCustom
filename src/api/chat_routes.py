@@ -652,7 +652,6 @@ async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, ses
     """
     composite_session_id = f"{customer_id}-{session_id}"
     
-    # Tạo session trong chat_history nếu chưa có
     with chat_history_lock:
         if composite_session_id not in chat_history:
             chat_history[composite_session_id] = {
@@ -673,25 +672,20 @@ async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, ses
     command = request.command.lower()
     
     if command == "stop":
-        # Cập nhật database
         create_or_update_session_control(db, customer_id, session_id, "stopped")
         
-        # Cập nhật memory state
         with chat_history_lock:
             chat_history[composite_session_id]["collected_customer_info"] = {}
         
         return {"status": "success", "message": f"Bot cho session {composite_session_id} đã được tạm dừng."}
     
     elif command == "start":
-        # Kiểm tra trạng thái hiện tại từ database
         session_control = get_session_control(db, customer_id, session_id)
         current_status = session_control.status if session_control else "active"
         
         if current_status == "stopped":
-            # Cập nhật database
             create_or_update_session_control(db, customer_id, session_id, "active")
             
-            # Cập nhật memory state
             with chat_history_lock:
                 chat_history[composite_session_id]["negativity_score"] = 0
                 chat_history[composite_session_id]["messages"].append({
@@ -711,7 +705,6 @@ async def human_chatting_endpoint(customer_id: str, session_id: str, db: Session
     """
     composite_session_id = f"{customer_id}-{session_id}"
     
-    # Tạo session trong chat_history nếu chưa có
     with chat_history_lock:
         if composite_session_id not in chat_history:
             chat_history[composite_session_id] = {
@@ -732,10 +725,8 @@ async def human_chatting_endpoint(customer_id: str, session_id: str, db: Session
         else:
             message = f"Bot cho session {composite_session_id} đã chuyển sang trạng thái human_chatting."
 
-    # Cập nhật database
     create_or_update_session_control(db, customer_id, session_id, "human_chatting")
     
-    # Cập nhật memory state
     with chat_history_lock:
         chat_history[composite_session_id]["handover_timestamp"] = time.time()
     
