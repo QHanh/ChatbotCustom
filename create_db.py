@@ -51,8 +51,9 @@ def create_database_if_not_exists():
 
 
 if __name__ == "__main__":
-    create_database_if_not_exists()
-    
-    print("Đang khởi tạo các bảng...")
+    print("Đang khởi tạo database...")
     init_db()
-    print("Khởi tạo bảng thành công.")
+    print("Database đã được khởi tạo thành công!")
+    print("Các bảng đã được tạo:")
+    print("- customers: Lưu thông tin cửa hàng")
+    print("- session_controls: Lưu trạng thái các session")

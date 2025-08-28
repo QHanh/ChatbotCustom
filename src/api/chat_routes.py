@@ -17,6 +17,7 @@ from src.config.settings import PAGE_SIZE
 from src.services.response_service import evaluate_and_choose_product, evaluate_purchase_confirmation, filter_products_with_ai
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
+from database.database import get_session_control, create_or_update_session_control
 import time
 HANDOVER_TIMEOUT = 900
 
@@ -28,6 +29,25 @@ bot_state_lock = threading.Lock()
 def _get_product_key(product: Dict) -> str:
     """Tạo một key định danh duy nhất cho sản phẩm."""
     return f"{product.get('product_name', '')}::{product.get('properties', '')}"
+
+def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
+    """Cập nhật trạng thái session trong cả database và memory"""
+    # Cập nhật database
+    create_or_update_session_control(db, customer_id, session_id, status)
+    
+    # Cập nhật memory state
+    if status == "human_calling":
+        session_data["state"] = "human_calling"
+        session_data["handover_timestamp"] = time.time()
+    elif status == "active":
+        session_data["state"] = None
+        session_data["negativity_score"] = 0
+    elif status == "stopped":
+        session_data["state"] = "stop_bot"
+        session_data["collected_customer_info"] = {}
+    elif status == "human_chatting":
+        session_data["state"] = "human_chatting"
+        session_data["handover_timestamp"] = time.time()
 
 async def chat_endpoint(
     customer_id: str,
@@ -56,6 +76,10 @@ async def chat_endpoint(
     sanitized_customer_id = sanitize_for_es(customer_id)
     composite_session_id = f"{sanitized_customer_id}_{session_id}"
 
+    # Kiểm tra trạng thái session từ database
+    session_control = get_session_control(db, customer_id, session_id)
+    session_status = session_control.status if session_control else "active"
+
     with chat_history_lock:
         session_data = chat_history.get(composite_session_id, {
             "messages": [],
@@ -72,11 +96,12 @@ async def chat_endpoint(
         }).copy()
         history = session_data["messages"][-8:].copy()
 
-    if session_data.get("state") == "stop_bot":
+    # Kiểm tra trạng thái từ database
+    if session_status == "stopped":
         _update_chat_history(composite_session_id, user_query, "", session_data)
         return ChatResponse(reply="", history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
 
-    if session_data.get("state") == "human_chatting":
+    if session_status == "human_chatting":
         _update_chat_history(composite_session_id, user_query, "", session_data)
         return ChatResponse(reply="", history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
     
@@ -160,8 +185,7 @@ async def chat_endpoint(
     response_text = ""
 
     if user_query.strip().lower() == "/bot":
-        session_data["state"] = None
-        session_data["negativity_score"] = 0
+        _update_session_state(db, customer_id, session_id, "active", session_data)
         response_text = "Dạ, em có thể giúp gì tiếp cho anh/chị ạ?"
         _update_chat_history(composite_session_id, user_query, response_text, session_data)
         return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
@@ -176,7 +200,7 @@ async def chat_endpoint(
             
             if not pending_items:
                 response_text = "Dạ có lỗi xảy ra, không tìm thấy sản phẩm cần xác nhận ạ."
-                session_data["state"] = None
+                _update_session_state(db, customer_id, session_id, "active", session_data)
                 _update_chat_history(composite_session_id, user_query, response_text, session_data)
                 return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy())
 
@@ -201,7 +225,7 @@ async def chat_endpoint(
                 confirmed_names = [f"{item.quantity} x {item.product_name}" for item in purchase_items]
                 response_text = f"Dạ em đã nhận được thông tin cho các sản phẩm: {', '.join(confirmed_names)}. Em sẽ tạo một đơn hàng mới cho mình ạ. Em cảm ơn anh/chị! /-heart"
                 
-                session_data["state"] = None
+                _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 session_data["has_past_purchase"] = True
                 
@@ -226,12 +250,12 @@ async def chat_endpoint(
                 return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
         elif decision == "CANCEL":
             response_text = "Dạ, em đã hủy yêu cầu đặt mua sản phẩm, nếu anh/chị muốn mua sản phẩm khác thì báo lại cho em ạ. /-heart"
-            session_data["state"] = None
+            _update_session_state(db, customer_id, session_id, "active", session_data)
             session_data["pending_purchase_item"] = None
             _update_chat_history(composite_session_id, user_query, response_text, session_data)
             return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy(), human_handover_required=False)
         else:
-            session_data["state"] = None
+            _update_session_state(db, customer_id, session_id, "active", session_data)
             session_data["pending_purchase_item"] = None
 
     if session_data.get("state") == "awaiting_customer_info":
@@ -242,7 +266,7 @@ async def chat_endpoint(
                 new_order_items = [{"intent": item, "status": "pending", "evaluation": None} for item in new_products_from_intent]
                 
                 session_data["pending_order"] = existing_order_items + new_order_items
-                session_data["state"] = None
+                _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 
             else:
@@ -275,8 +299,7 @@ async def chat_endpoint(
                 pending_items = session_data.get("pending_purchase_item", [])
                 if not pending_items:
                     response_text = "Dạ, anh chị đợi chút, em chưa tìm thấy sản phẩm để đặt hàng ạ. Nhân viên phụ trách bên em sẽ vào trả lời ngay ạ."
-                    session_data["state"] = "human_calling"
-                    session_data["handover_timestamp"] = time.time()
+                    _update_session_state(db, customer_id, session_id, "human_calling", session_data)
                     session_data["state"] = None
                     _update_chat_history(composite_session_id, user_query, response_text, session_data)
                     return ChatResponse(reply=response_text, history=chat_history[composite_session_id]["messages"].copy())
@@ -304,7 +327,7 @@ async def chat_endpoint(
                 )
                 
                 response_text = "Dạ em đã nhận được đầy đủ thông tin. Em cảm ơn anh/chị! /-heart"
-                session_data["state"] = None
+                _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 session_data["has_past_purchase"] = True
                 
@@ -327,8 +350,7 @@ async def chat_endpoint(
 
     if analysis_result.get("is_bank_transfer"):
         response_text = "Dạ, anh/chị đợi chút, nhân viên bên em sẽ vào ngay ạ."
-        session_data["state"] = "human_calling"
-        session_data["handover_timestamp"] = time.time()
+        _update_session_state(db, customer_id, session_id, "human_calling", session_data)
         _update_chat_history(composite_session_id, user_query, response_text, session_data)
         return ChatResponse(
             reply=response_text,
@@ -341,8 +363,7 @@ async def chat_endpoint(
         session_data["negativity_score"] += 1
         if session_data["negativity_score"] >= 3:
             response_text = "Em đã báo nhân viên phụ trách, anh/chị vui lòng đợi để được hỗ trợ ngay ạ."
-            session_data["state"] = "human_calling"
-            session_data["handover_timestamp"] = time.time()
+            _update_session_state(db, customer_id, session_id, "human_calling", session_data)
             session_data["negativity_score"] = 0
             _update_chat_history(composite_session_id, user_query, response_text, session_data)
             
@@ -402,8 +423,7 @@ async def chat_endpoint(
     if analysis_result.get("wants_warranty_service"):
         if session_data.get("has_past_purchase"):
             response_text = "Dạ anh/chị đợi chút, nhân viên phụ trách bảo hành bên em sẽ vào trả lời ngay ạ."
-            session_data["state"] = "human_calling"
-            session_data["handover_timestamp"] = time.time()
+            _update_session_state(db, customer_id, session_id, "human_calling", session_data)
             _update_chat_history(composite_session_id, user_query, response_text, session_data)
             return ChatResponse(
                 reply=response_text,
@@ -413,8 +433,7 @@ async def chat_endpoint(
             )
 
         response_text = "Dạ anh/chị đợi chút, nhân viên phụ trách bảo hành bên em sẽ vào trả lời ngay ạ."
-        session_data["state"] = "human_calling"
-        session_data["handover_timestamp"] = time.time()
+        _update_session_state(db, customer_id, session_id, "human_calling", session_data)
         _update_chat_history(composite_session_id, user_query, response_text, session_data)
         return ChatResponse(
             reply=response_text,
@@ -425,8 +444,7 @@ async def chat_endpoint(
     
     if analysis_result.get("wants_human_agent"):
         response_text = "Em đã báo nhân viên phụ trách, anh/chị vui lòng đợi để được hỗ trợ ngay ạ."
-        session_data["state"] = "human_calling"
-        session_data["handover_timestamp"] = time.time()
+        _update_session_state(db, customer_id, session_id, "human_calling", session_data)
         
         _update_chat_history(composite_session_id, user_query, response_text, session_data)
         
@@ -628,11 +646,13 @@ async def chat_endpoint(
         action_data=action_data
     )
 
-async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, session_id: str):
+async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, session_id: str, db: Session):
     """
     Điều khiển trạng thái của bot (dừng hoặc tiếp tục).
     """
     composite_session_id = f"{customer_id}-{session_id}"
+    
+    # Tạo session trong chat_history nếu chưa có
     with chat_history_lock:
         if composite_session_id not in chat_history:
             chat_history[composite_session_id] = {
@@ -650,33 +670,48 @@ async def control_bot_endpoint(request: ControlBotRequest, customer_id: str, ses
             }
             print(f"Đã tạo session mới: {composite_session_id} thông qua control endpoint.")
 
-        command = request.command.lower()
+    command = request.command.lower()
+    
+    if command == "stop":
+        # Cập nhật database
+        create_or_update_session_control(db, customer_id, session_id, "stopped")
         
-        if command == "stop":
-            chat_history[composite_session_id]["state"] = "stop_bot"
+        # Cập nhật memory state
+        with chat_history_lock:
             chat_history[composite_session_id]["collected_customer_info"] = {}
-            return {"status": "success", "message": f"Bot cho session {composite_session_id} đã được tạm dừng."}
         
-        elif command == "start":
-            if chat_history[composite_session_id].get("state") == "stop_bot":
-                chat_history[composite_session_id]["state"] = None
+        return {"status": "success", "message": f"Bot cho session {composite_session_id} đã được tạm dừng."}
+    
+    elif command == "start":
+        # Kiểm tra trạng thái hiện tại từ database
+        session_control = get_session_control(db, customer_id, session_id)
+        current_status = session_control.status if session_control else "active"
+        
+        if current_status == "stopped":
+            # Cập nhật database
+            create_or_update_session_control(db, customer_id, session_id, "active")
+            
+            # Cập nhật memory state
+            with chat_history_lock:
                 chat_history[composite_session_id]["negativity_score"] = 0
                 chat_history[composite_session_id]["messages"].append({
                     "user": "[SYSTEM]",
                     "bot": "Bot đã được kích hoạt lại bởi quản trị viên."
                 })
-                return {"status": "success", "message": f"Bot cho session {composite_session_id} đã được kích hoạt lại."}
-            else:
-                return {"status": "no_change", "message": f"Bot cho session {composite_session_id} đã hoạt động."}
-        
+            return {"status": "success", "message": f"Bot cho session {composite_session_id} đã được kích hoạt lại."}
         else:
-            raise HTTPException(status_code=400, detail="Command không hợp lệ. Chỉ chấp nhận 'start' hoặc 'stop'.")
+            return {"status": "no_change", "message": f"Bot cho session {composite_session_id} đã hoạt động."}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Command không hợp lệ. Chỉ chấp nhận 'start' hoặc 'stop'.")
 
-async def human_chatting_endpoint(customer_id: str, session_id: str):
+async def human_chatting_endpoint(customer_id: str, session_id: str, db: Session):
     """
     Chuyển sang trạng thái human_chatting.
     """
     composite_session_id = f"{customer_id}-{session_id}"
+    
+    # Tạo session trong chat_history nếu chưa có
     with chat_history_lock:
         if composite_session_id not in chat_history:
             chat_history[composite_session_id] = {
@@ -697,9 +732,14 @@ async def human_chatting_endpoint(customer_id: str, session_id: str):
         else:
             message = f"Bot cho session {composite_session_id} đã chuyển sang trạng thái human_chatting."
 
-        chat_history[composite_session_id]["state"] = "human_chatting"
+    # Cập nhật database
+    create_or_update_session_control(db, customer_id, session_id, "human_chatting")
+    
+    # Cập nhật memory state
+    with chat_history_lock:
         chat_history[composite_session_id]["handover_timestamp"] = time.time()
-        return {"status": "success", "message": message}
+    
+    return {"status": "success", "message": message}
  
 def _handle_more_products(customer_id: str, user_query: str, session_data: dict, history: list, model_choice: str, analysis: dict, db: Session, api_key: str = None):
     last_query = session_data["last_query"]
@@ -864,3 +904,25 @@ async def power_off_bot_endpoint(request: ControlBotRequest):
             return {"status": "info", "message": status_message}
         else:
             raise HTTPException(status_code=400, detail="Invalid command. Use 'start' or 'stop'.")
+
+async def get_session_controls_endpoint(customer_id: str, db: Session):
+    """
+    Lấy danh sách tất cả session controls của một customer.
+    """
+    from database.database import get_all_session_controls_by_customer
+    
+    session_controls = get_all_session_controls_by_customer(db, customer_id)
+    
+    result = []
+    for control in session_controls:
+        result.append({
+            "id": control.id,
+            "customer_id": control.customer_id,
+            "session_id": control.session_id,
+            "session_name": control.session_name,
+            "status": control.status,
+            "created_at": control.created_at.isoformat() if control.created_at else None,
+            "updated_at": control.updated_at.isoformat() if control.updated_at else None
+        })
+    
+    return {"status": "success", "data": result}

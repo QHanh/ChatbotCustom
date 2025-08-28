@@ -4,16 +4,15 @@ from src.config.settings import GEMINI_API_KEY, LMSTUDIO_API_URL, LMSTUDIO_MODEL
 from typing import Optional
 import io
 from PIL import Image
-from fastapi import UploadFile
 
-def get_gemini_model(is_vision: bool = False, api_key: str = None):
+def get_gemini_model(is_vision: bool = False):
     """Khởi tạo và trả về model Gemini."""
-    if not api_key:
+    if not GEMINI_API_KEY:
         print("Không tìm thấy GEMINI_API_KEY.")
         return None
     try:
         import google.generativeai as genai
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=GEMINI_API_KEY)
         if is_vision:
             model = genai.GenerativeModel('gemini-2.0-flash')
         else:
@@ -47,28 +46,24 @@ def get_lmstudio_response(prompt: str):
         print(f"Lỗi khi gọi LM Studio: {e}")
         return None
 
-def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, api_key: str = None) -> Optional[str]:
+def analyze_image_with_vision(image_url: str) -> Optional[str]:
     """
     Sử dụng Gemini Pro Vision để phân tích và mô tả nội dung của một hình ảnh.
     """
     try:
-        model = get_gemini_model(is_vision=True, api_key=api_key)
+        model = get_gemini_model(is_vision=True)
         if not model:
             print("Không thể khởi tạo model Gemini Vision.")
             return None
 
-        if not image_bytes and image_url:
-            print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
-            response = requests.get(image_url, timeout=15)
-            response.raise_for_status()
-            image_bytes = response.content
-        
-        if not image_bytes:
-            return None
+        print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
+        response = requests.get(image_url, timeout=15)
+        response.raise_for_status()
+        image_bytes = response.content
         
         image = Image.open(io.BytesIO(image_bytes))
 
-        prompt = "Hãy mô tả ngắn gọn nội dung và mục đích của hình ảnh này bằng tiếng Việt. Tập trung vào việc xác định xem nó là sản phẩm, hóa đơn, biên lai chuyển khoản, hay một đoạn chat. Chỉ trả về nội dung mô tả, không thêm lời chào."
+        prompt = "Hãy mô tả ngắn gọn nội dung và mục đích của hình ảnh này bằng tiếng Việt. Tập trung vào việc xác định xem nó là sản phẩm, hóa đơn, biên lai chuyển khoản, hay một đoạn chat. Chỉ trả về nội dung mô tả kèm theo câu 'Khách hàng gửi một hình ảnh mô tả ...' ở đầu, không thêm lời chào."
         
         print(" -> Gửi ảnh và prompt đến Gemini Vision...")
         response = model.generate_content([prompt, image])
@@ -80,13 +75,13 @@ def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, 
         print(f"Lỗi trong quá trình phân tích ảnh bằng AI Vision: {e}")
         return None
 
-def get_openai_model(api_key: str = None):
+def get_openai_model():
     """Khởi tạo và trả về client openai chuẩn >=1.0.0, hoặc None nếu thiếu key."""
     try:
         import openai
-        if not api_key:
+        if not OPENAI_API_KEY:
             return None
-        client = openai.OpenAI(api_key=api_key)
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
         return client
     except Exception as e:
         print(f"Lỗi khi khởi tạo OpenAI client: {e}")

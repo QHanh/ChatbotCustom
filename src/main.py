@@ -5,7 +5,7 @@ import time
 
 from src.config.settings import APP_CONFIG, CORS_CONFIG
 from src.models.schemas import ControlBotRequest
-from src.api.chat_routes import chat_endpoint, chat_history, chat_history_lock, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint
+from src.api.chat_routes import chat_endpoint, chat_history, chat_history_lock, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint
 from dependencies import init_es_client, close_es_client, get_db
 from contextlib import asynccontextmanager
 from src.api import upload_data_routes, info_store_routes
@@ -30,6 +30,8 @@ def session_timeout_scanner():
     """
     Quét và reset các session bị timeout trong một luồng nền.
     """
+    from database.database import SessionLocal, get_session_control, create_or_update_session_control
+    
     while True:
         print("Chạy tác vụ nền: Quét các session timeout...")
         with chat_history_lock:
@@ -43,6 +45,22 @@ def session_timeout_scanner():
             
             for session_id in sessions_to_reactivate:
                 print(f"Session {session_id} đã quá hạn. Kích hoạt lại bot.")
+                
+                # Parse customer_id và session_id từ composite_session_id
+                if "_" in session_id:
+                    parts = session_id.split("_", 1)
+                    if len(parts) == 2:
+                        customer_id, actual_session_id = parts
+                        
+                        # Cập nhật database
+                        try:
+                            db = SessionLocal()
+                            create_or_update_session_control(db, customer_id, actual_session_id, "active")
+                            db.close()
+                        except Exception as e:
+                            print(f"Lỗi khi cập nhật database cho session {session_id}: {e}")
+                
+                # Cập nhật memory state
                 chat_history[session_id]["state"] = None
                 chat_history[session_id]["negativity_score"] = 0
                 chat_history[session_id]["messages"].append({
@@ -104,7 +122,8 @@ async def chat(
 async def control_bot(
     customer_id: str,
     request: ControlBotRequest, 
-    session_id: str = Query(..., description="ID phiên chat")
+    session_id: str = Query(..., description="ID phiên chat"),
+    db: Session = Depends(get_db)
 ):
     """
     Endpoint để điều khiển bot.
@@ -112,19 +131,20 @@ async def control_bot(
     - **command**: "start" để tiếp tục, "stop" để tạm dừng.
     - **session_id**: ID của phiên chat cần điều khiển.
     """
-    return await control_bot_endpoint(request, customer_id, session_id)
+    return await control_bot_endpoint(request, customer_id, session_id, db)
 
 @app.post("/human-chatting/{customer_id}", summary="Chuyển sang trạng thái human_chatting")
 async def human_chatting(
     customer_id: str,
-    session_id: str = Query(..., description="ID phiên chat")
+    session_id: str = Query(..., description="ID phiên chat"),
+    db: Session = Depends(get_db)
 ):
     """
     Endpoint để chuyển sang trạng thái human_chatting.
     - **customer_id**: Mã khách hàng.
     - **session_id**: ID phiên chat cần chuyển sang trạng thái human_chatting.
     """
-    return await human_chatting_endpoint(customer_id, session_id)
+    return await human_chatting_endpoint(customer_id, session_id, db)
 
 @app.post("/power-off-bot", summary="Stop or start the bot globally")
 async def power_off_bot(request: ControlBotRequest):
@@ -133,6 +153,17 @@ async def power_off_bot(request: ControlBotRequest):
     - **command**: "start" to continue, "stop" to pause.
     """
     return await power_off_bot_endpoint(request)
+
+@app.get("/session-controls/{customer_id}", summary="Lấy danh sách session controls của customer")
+async def get_session_controls(
+    customer_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint để lấy danh sách tất cả session controls của một customer.
+    - **customer_id**: Mã khách hàng.
+    """
+    return await get_session_controls_endpoint(customer_id, db)
 
 if __name__ == "__main__":
     import uvicorn

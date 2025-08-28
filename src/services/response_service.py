@@ -401,6 +401,11 @@ def evaluate_and_choose_product(user_query: str, history_text: str, product_cand
     - Nếu tin nhắn gần nhất của bot là một lời GỢI Ý các sản phẩm tương tự (ví dụ: bắt đầu bằng "Em chưa tìm thấy chính xác..."), và tin nhắn mới nhất của khách hàng là một lời ĐỒNG Ý hoặc CHẤP NHẬN các sản phẩm được gợi ý (ví dụ: "ok", "lấy màu đó đi", "vậy lấy 2 màu đó"), HÃY coi đó là một PERFECT_MATCH.
     - Trong trường hợp này, hãy chọn sản phẩm trong danh sách khớp với gợi ý mà khách hàng vừa đồng ý, và trả về type: "PERFECT_MATCH" và score: 1.0.
 
+    ## PHÂN BIỆT MÔ TẢ VÀ TÊN MODEL/THƯƠNG HIỆU (QUAN TRỌNG) ##
+    - Nếu yêu cầu của khách chứa một tên thương hiệu hoặc model cụ thể (ví dụ: "lowe", "kaisi", "quick 861dw"), một sản phẩm CHỈ CÓ THỂ là "PERFECT_MATCH" nếu nó cũng chứa chính xác tên thương hiệu/model đó.
+    - Một sản phẩm có cùng loại nhưng khác thương hiệu (ví dụ: khách hỏi "keo lowe" nhưng sản phẩm là "keo mijing") thì BẮT BUỘC phải là "CLOSE_MATCH".
+    - Nếu yêu cầu của khách là một mô tả chung (ví dụ: "kính hiển vi 2 mắt") mà có nhiều sản phẩm trong danh sách đều có thể phù hợp thì là "NO_MATCH".
+
     ## Quy tắc trả về:
     - Hãy trả về kết quả dưới dạng một đối tượng JSON duy nhất.
     - Cấu trúc JSON: {{"type": "PERFECT_MATCH" | "CLOSE_MATCH" | "NO_MATCH", "score": ĐIỂM_SỐ (0.0 đến 1.0), "index": SỐ_THỨ_TỰ | null, "reason": "Lý do không khớp (nếu có)" | null}}
