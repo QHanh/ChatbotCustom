@@ -15,12 +15,27 @@ from sqlalchemy.orm import Session
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Application startup...")
-    await init_es_client()
+    print("🚀 Application startup...")
+    try:
+        print("📡 Initializing Elasticsearch client...")
+        await init_es_client()
+        print("✅ Elasticsearch initialization completed")
+    except Exception as e:
+        print(f"❌ Elasticsearch initialization failed: {e}")
+    
+    # Khởi động tác vụ nền để quét session timeout
+    scanner_thread = threading.Thread(target=session_timeout_scanner, daemon=True)
+    scanner_thread.start()
+    print("Đã khởi động tác vụ nền để quét session timeout.")
+    
     # init_db()
     yield
-    print("Application shutdown.")
-    await close_es_client()
+    print("🛑 Application shutdown...")
+    try:
+        await close_es_client()
+        print("✅ Elasticsearch client closed")
+    except Exception as e:
+        print(f"❌ Error closing Elasticsearch client: {e}")
 
 app = FastAPI(**APP_CONFIG, lifespan=lifespan)
 
@@ -70,16 +85,6 @@ def session_timeout_scanner():
         
         time.sleep(300)
 
-
-# Định nghĩa các routes
-@app.on_event("startup")
-async def startup_event():
-    """
-    Tạo luồng nền để quét các session bị timeout.
-    """
-    scanner_thread = threading.Thread(target=session_timeout_scanner, daemon=True)
-    scanner_thread.start()
-    print("Đã khởi động tác vụ nền để quét session timeout.")
 
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
