@@ -81,7 +81,15 @@ async def process_and_index_data(
     sanitized_customer_id = sanitize_for_es(customer_id)
     try:
         df = pd.read_excel(io.BytesIO(file_content))
-        df.columns = columns_config['names']
+        
+        config_cols = columns_config.get('names', [])
+        rename_map = columns_config.get('rename_map', {})
+
+        missing_cols = [col for col in config_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Các cột sau không tìm thấy trong file Excel: {', '.join(missing_cols)}")
+
+        df = df[config_cols]
 
         for col in columns_config.get('required', []):
             if pd.api.types.is_string_dtype(df[col]):
@@ -95,16 +103,22 @@ async def process_and_index_data(
                 df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0).astype(float)
             elif dtype == int:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-            
+
+        if rename_map:
+            df.rename(columns=rename_map, inplace=True)
+
         df['customer_id'] = sanitized_customer_id
         df = df.where(pd.notnull(df), None).replace({np.nan: None})
     except Exception as e:
         raise ValueError(f"Lỗi đọc hoặc xử lý file Excel: {e}")
 
     actions = []
+    original_id_field = columns_config.get('id_field')
+    renamed_id_field = rename_map.get(original_id_field, original_id_field)
+
     for _, row in df.iterrows():
         doc = row.to_dict()
-        product_id = doc.get(columns_config['id_field'])
+        product_id = doc.get(renamed_id_field)
         if product_id is None:
             continue
         sanitized_product_id = sanitize_for_es(str(product_id))
@@ -222,11 +236,22 @@ async def process_and_upsert_file_data(
     """
     try:
         df = pd.read_excel(io.BytesIO(file_content))
-        df.columns = columns_config['names']
+        config_cols = columns_config.get('names', [])
+        rename_map = columns_config.get('rename_map', {})
+
+        missing_cols = [col for col in config_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Các cột sau không tìm thấy trong file Excel: {', '.join(missing_cols)}")
+
+        df = df[config_cols]
+
         df = df.dropna(subset=columns_config['required'])
 
         for col, dtype in columns_config.get('numerics', {}).items():
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0).astype(dtype)
+        
+        if rename_map:
+            df.rename(columns=rename_map, inplace=True)
 
         df = df.where(pd.notnull(df), None).replace({np.nan: None})
     except Exception as e:
@@ -236,12 +261,15 @@ async def process_and_upsert_file_data(
     if not documents:
         return 0, 0
 
+    original_id_field = columns_config.get('id_field')
+    renamed_id_field = rename_map.get(original_id_field, original_id_field)
+
     success, failed = await bulk_index_documents(
         es_client,
         index_name,
         customer_id,
         documents,
-        id_field=columns_config['id_field']
+        id_field=renamed_id_field
     )
     return success, failed
 
