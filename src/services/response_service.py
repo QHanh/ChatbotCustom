@@ -120,9 +120,9 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
                 product_context += f"  Thuộc tính: {prop}\n"
             
             price = item.get('lifecare_price', 0)
-            price_str = f"{price:,.0f}đ" if price > 0 else "Liên hệ"
+            price_str = f"{price:,.0f}đ" if price is not None and price > 0 else "Liên hệ"
             sale_price = item.get('sale_price', 0)
-            sale_price_str = f"{sale_price:,.0f}đ" if sale_price > 0 else "Liên hệ"
+            sale_price_str = f"{sale_price:,.0f}đ" if sale_price is not None and sale_price > 0 else "Liên hệ"
             product_context += f"  Giá: {price_str} - Giá buôn: {sale_price_str}\n"
             inventory = item.get('inventory', 0)
             if inventory > 0:
@@ -140,11 +140,12 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
                 price = item.get('lifecare_price', 0)
                 sale_price = item.get('sale_price', 0)
                 inventory = item.get('inventory', 0)
-                price_str = f"{price:,.0f}đ" if price > 0 else "Liên hệ"
+                price_str = f"{price:,.0f}đ" if price is not None and price > 0 else "Liên hệ"
+                sale_price_str = f"{sale_price:,.0f}đ" if sale_price is not None and sale_price > 0 else "Liên hệ"
                 stock_str = f"Còn hàng ({inventory})" if inventory > 0 else "Hết hàng"
                 guarantee = item.get('guarantee')
                 link_product = item.get('link_product')
-                product_context += f"    + {prop} - Giá: {price_str} - Tình trạng: {stock_str} - Bảo hành: {guarantee} - Link sản phẩm: {link_product}\n"
+                product_context += f"    + {prop} - Giá: {price_str} - Giá buôn: {sale_price_str} - Tình trạng: {stock_str} - Bảo hành: {guarantee} - Link sản phẩm: {link_product}\n"
         
         if include_specs:
             product_context += f"  Mô tả: {sorted_items[0].get('specifications', 'N/A')}\n"

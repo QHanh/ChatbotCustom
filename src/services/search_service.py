@@ -4,7 +4,7 @@ from src.config.settings import PAGE_SIZE
 from typing import List, Dict
 
 ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "http://localhost:9200")
-INDEX_NAME = os.environ.get("ELASTIC_INDEX", "products_customer")
+INDEX_NAME = "products_customer"
 
 try:
     es_client = Elasticsearch(hosts=[ELASTIC_HOST])
