@@ -30,8 +30,8 @@ PRODUCT_COLUMNS_CONFIG = {
         'Giá bán buôn': float
     },
     'rename_map': {
-        'Product code': 'accessory_code',
-        'Product name': 'accessory_name',
+        'Product code': 'product_code',
+        'Product name': 'product_name',
         'category': 'category',
         'PROPERTIES': 'properties',
         'amount': 'lifecare_price',

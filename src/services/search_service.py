@@ -2,6 +2,7 @@ import os
 from elasticsearch import Elasticsearch
 from src.config.settings import PAGE_SIZE
 from typing import List, Dict
+from src.utils.helpers import sanitize_for_es
 
 ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "http://localhost:9200")
 INDEX_NAME = "products_customer"
@@ -22,13 +23,15 @@ def search_products(customer_id: str, product_name: str = None, category: str = 
     if not product_name and not category and not properties:
         return []
 
+    sanitized_customer_id = sanitize_for_es(customer_id)
+
     body = {
         "query": {
             "bool": {
                 "must": [],
                 "should": [],
                 "filter": [
-                    {"term": {"customer_id": customer_id}}
+                    {"term": {"customer_id": sanitized_customer_id}}
                 ]
             }
         },
@@ -71,7 +74,7 @@ def search_products(customer_id: str, product_name: str = None, category: str = 
         response = es_client.search(
             index=INDEX_NAME,
             body=body,
-            routing=customer_id
+            routing=sanitized_customer_id
         )
         hits = [hit['_source'] for hit in response['hits']['hits']]
         print(f"Tìm thấy {len(hits)} sản phẩm cho customer '{customer_id}' (offset={offset}, strict_cat={strict_category}, strict_prop={strict_properties}).")
@@ -92,6 +95,8 @@ def search_products_by_image(customer_id: str, image_embedding: list, top_k: int
     if not image_embedding:
         return []
 
+    sanitized_customer_id = sanitize_for_es(customer_id)
+
     knn_query = {
         "field": "image_embedding", 
         "query_vector": image_embedding,
@@ -101,7 +106,7 @@ def search_products_by_image(customer_id: str, image_embedding: list, top_k: int
     
     query = {
         "term": {
-            "customer_id": customer_id
+            "customer_id": sanitized_customer_id
         }
     }
 
@@ -110,7 +115,7 @@ def search_products_by_image(customer_id: str, image_embedding: list, top_k: int
             index=INDEX_NAME,
             knn=knn_query,
             query=query,
-            routing=customer_id,
+            routing=sanitized_customer_id,
             min_score=min_similarity,
             size=top_k,
             _source_includes=[ 

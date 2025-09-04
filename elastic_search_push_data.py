@@ -202,7 +202,7 @@ async def bulk_index_documents(es_client: Elasticsearch, index_name: str, custom
         if not doc_id:
             continue 
         
-        sanitized_doc_id = sanitize_for_es(doc_id)
+        sanitized_doc_id = sanitize_for_es(str(doc_id))
         composite_id = f"{sanitized_customer_id}_{sanitized_doc_id}"
         doc['customer_id'] = sanitized_customer_id
         
@@ -234,6 +234,7 @@ async def process_and_upsert_file_data(
     Đọc file Excel, xử lý và NẠP THÊM (upsert) dữ liệu vào index chia sẻ.
     Hàm này KHÔNG xóa dữ liệu cũ của khách hàng.
     """
+    sanitized_customer_id = sanitize_for_es(customer_id)
     try:
         df = pd.read_excel(io.BytesIO(file_content))
         config_cols = columns_config.get('names', [])
@@ -253,6 +254,7 @@ async def process_and_upsert_file_data(
         if rename_map:
             df.rename(columns=rename_map, inplace=True)
 
+        df['customer_id'] = sanitized_customer_id
         df = df.where(pd.notnull(df), None).replace({np.nan: None})
     except Exception as e:
         raise ValueError(f"Lỗi đọc hoặc xử lý file Excel: {e}")
@@ -267,7 +269,7 @@ async def process_and_upsert_file_data(
     success, failed = await bulk_index_documents(
         es_client,
         index_name,
-        customer_id,
+        sanitized_customer_id,
         documents,
         id_field=renamed_id_field
     )
