@@ -70,3 +70,15 @@ class StoreInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CustomerIsSaleBase(BaseModel):
+    customer_id: str
+    thread_id: str
+    is_sale: bool
+
+class CustomerIsSaleCreate(CustomerIsSaleBase):
+    pass
+
+class CustomerIsSale(CustomerIsSaleBase):
+    class Config:
+        from_attributes = True

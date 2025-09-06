@@ -12,6 +12,10 @@ from src.api import upload_data_routes, info_store_routes
 import logging
 logging.getLogger("watchfiles").setLevel(logging.ERROR)
 from sqlalchemy.orm import Session
+from src.api import customer_is_sale_routes
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -88,6 +92,7 @@ def session_timeout_scanner():
 
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
+app.include_router(customer_is_sale_routes.router)
 
 @app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(

@@ -17,7 +17,7 @@ from src.config.settings import PAGE_SIZE
 from src.services.response_service import evaluate_and_choose_product, evaluate_purchase_confirmation, filter_products_with_ai
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
-from database.database import get_session_control, create_or_update_session_control
+from database.database import get_session_control, create_or_update_session_control, get_customer_is_sale
 import time
 HANDOVER_TIMEOUT = 900
 
@@ -75,6 +75,12 @@ async def chat_endpoint(
 
     sanitized_customer_id = sanitize_for_es(customer_id)
     composite_session_id = f"{sanitized_customer_id}_{session_id}"
+
+    # Kiểm tra khách hàng có phải là sale không
+    is_sale_customer = False
+    customer_sale_info = get_customer_is_sale(db, customer_id, session_id)
+    if customer_sale_info and customer_sale_info.is_sale:
+        is_sale_customer = True
 
     # Kiểm tra trạng thái session từ database
     session_control = get_session_control(db, customer_id, session_id)
@@ -156,7 +162,10 @@ async def chat_endpoint(
                         history=history,
                         model_choice=model_choice,
                         is_image_search=True,
-                        api_key=api_key
+                        api_key=api_key,
+                        db=db,
+                        customer_id=customer_id,
+                        is_sale=is_sale_customer
                     )
                     
                     _update_chat_history(composite_session_id, user_query, response_text, session_data)
@@ -762,8 +771,17 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
     for p in new_products:
         shown_keys.add(_get_product_key(p))
 
+    # Kiểm tra is_sale
+    session_id = session_data.get("session_id", "")
+    is_sale_customer = False
+    if session_id:
+        customer_sale_info = get_customer_is_sale(db, customer_id, session_id)
+        if customer_sale_info and customer_sale_info.is_sale:
+            is_sale_customer = True
+
+
     result = generate_llm_response(
-        user_query, new_products, history, analysis["wants_specs"], model_choice, True, analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key
+        user_query, new_products, history, analysis["wants_specs"], model_choice, True, analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key, is_sale=is_sale_customer
     )
     
     product_images = []
@@ -816,9 +834,16 @@ def _handle_new_query(customer_id: str, user_query: str, session_data: dict, his
             session_data["offset"] = 0
             session_data["shown_product_keys"] = set()
 
+    # Kiểm tra is_sale
+    session_id = session_data.get("session_id", "")
+    is_sale_customer = False
+    if session_id:
+        customer_sale_info = get_customer_is_sale(db, customer_id, session_id)
+        if customer_sale_info and customer_sale_info.is_sale:
+            is_sale_customer = True
 
     result = generate_llm_response(
-        user_query, retrieved_data, history, analysis["wants_specs"], model_choice, analysis["needs_search"], analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key
+        user_query, retrieved_data, history, analysis["wants_specs"], model_choice, analysis["needs_search"], analysis["wants_images"], db=db, customer_id=customer_id, api_key=api_key, is_sale=is_sale_customer
     )
     
     if analysis["wants_images"] and isinstance(result, dict):
@@ -847,6 +872,7 @@ def _update_chat_history(session_id: str, user_query: str, response_text: str, s
         current_session["collected_customer_info"] = session_data.get("collected_customer_info", {})
         current_session["has_past_purchase"] = session_data.get("has_past_purchase", False)
         current_session["pending_order"] = session_data.get("pending_order")
+        current_session["session_id"] = session_data.get("session_id") # Thêm session_id vào đây
         chat_history[session_id] = current_session
 
 def _process_images(wants_images: bool, retrieved_data: list, product_images_names: list) -> list[ImageInfo]:

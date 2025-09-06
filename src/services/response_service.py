@@ -18,7 +18,8 @@ def generate_llm_response(
     is_image_search: bool = False,
     db: Session = None,
     customer_id: str = None,
-    api_key: str = None
+    api_key: str = None,
+    is_sale: bool = False
 ) -> str:
     """
     Tạo prompt và gọi đến LLM để sinh câu trả lời.
@@ -42,7 +43,7 @@ def generate_llm_response(
         context += "Lịch sử hội thoại gần đây:\n(Đây là tin nhắn đầu tiên)\n"
 
     if needs_product_search:
-        context += _build_product_context(search_results, include_specs)
+        context += _build_product_context(search_results, include_specs, is_sale)
 
     product_infos = [
         f"{p.get('product_name', '')} ({p.get('properties', '')})"
@@ -97,7 +98,7 @@ def generate_llm_response(
         return _get_fallback_response(search_results, needs_product_search)
 
 
-def _build_product_context(search_results: List[Dict], include_specs: bool = False) -> str:
+def _build_product_context(search_results: List[Dict], include_specs: bool = False, is_sale: bool = False) -> str:
     """
     Xây dựng context thông tin sản phẩm, nhóm các sản phẩm cùng tên lại với nhau.
     """
@@ -122,8 +123,8 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
             price = item.get('lifecare_price', 0)
             price_str = f"{price:,.0f}đ" if price is not None and price > 0 else "Liên hệ"
             sale_price = item.get('sale_price', 0)
-            sale_price_str = f"{sale_price:,.0f}đ" if sale_price is not None and sale_price > 0 else "Liên hệ"
-            product_context += f"  Giá: {price_str} - Giá buôn: {sale_price_str}\n"
+            sale_price_str = f" - Giá buôn: {sale_price:,.0f}đ" if is_sale and sale_price is not None and sale_price > 0 else ""
+            product_context += f"  Giá: {price_str}{sale_price_str}\n"
             inventory = item.get('inventory', 0)
             if inventory > 0:
                 product_context += f"  Tình trạng: Còn hàng ({inventory} sản phẩm)\n"
@@ -141,11 +142,11 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
                 sale_price = item.get('sale_price', 0)
                 inventory = item.get('inventory', 0)
                 price_str = f"{price:,.0f}đ" if price is not None and price > 0 else "Liên hệ"
-                sale_price_str = f"{sale_price:,.0f}đ" if sale_price is not None and sale_price > 0 else "Liên hệ"
+                sale_price_str = f" - Giá buôn: {sale_price:,.0f}đ" if is_sale and sale_price is not None and sale_price > 0 else ""
                 stock_str = f"Còn hàng ({inventory})" if inventory > 0 else "Hết hàng"
                 guarantee = item.get('guarantee')
                 link_product = item.get('link_product')
-                product_context += f"    + {prop} - Giá: {price_str} - Giá buôn: {sale_price_str} - Tình trạng: {stock_str} - Bảo hành: {guarantee} - Link sản phẩm: {link_product}\n"
+                product_context += f"    + {prop} - Giá: {price_str}{sale_price_str} - Tình trạng: {stock_str} - Bảo hành: {guarantee} - Link sản phẩm: {link_product}\n"
         
         if include_specs:
             product_context += f"  Mô tả: {sorted_items[0].get('specifications', 'N/A')}\n"
@@ -292,7 +293,6 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
     - **KHÔNG** tự động nói ra số lượng tồn kho chính xác hay tình trạng "Còn hàng". Chỉ nói khi khách hỏi.
     
 9.  **Giá sản phẩm:**
-    - **KHÔNG** được nói giá buôn khi liệt kê sản phẩm trừ khi khách hàng hỏi.
     - **Các sản phẩm có giá là **Liên hệ** thì **KHÔNG ĐƯỢC** nói ra giá, chỉ nói tên sản phẩm KHÔNG KÈM GIÁ.
     - **Các sản phẩm có giá **KHÁC** **Liên hệ** thì hãy luôn nói kèm giá khi liệt kê.
     - **CHỈ KHI** khách hàng hỏi giá của sản phẩm có giá "Liên hệ" thì hãy nói "Sản phẩm này em chưa có giá chính xác, nếu anh/chị muốn mua thì em sẽ xem lại và báo lại cho anh chị một mức giá hợp lý".

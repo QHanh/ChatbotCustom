@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, String, DateTime
+from sqlalchemy import Boolean, create_engine, Column, String, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.sql import func
 from dotenv import load_dotenv
@@ -37,6 +37,13 @@ class SessionControl(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+class CustomerisSale(Base):
+    __tablename__ = "customer_is_sale"
+
+    customer_id = Column(String, primary_key=True, index=True)
+    thread_id = Column(String, nullable=False, index=True)
+    is_sale = Column(Boolean, nullable=False, default=False)
+    
 def init_db():
     Base.metadata.create_all(bind=engine)
 
@@ -88,3 +95,26 @@ def delete_session_control(db: SessionLocal, customer_id: str, session_id: str):
         db.commit()
         return True
     return False
+
+# Helper functions for CustomerisSale
+def get_customer_is_sale(db: SessionLocal, customer_id: str, thread_id: str):
+    """Lấy thông tin is_sale của khách hàng"""
+    return db.query(CustomerisSale).filter_by(customer_id=customer_id, thread_id=thread_id).first()
+
+def create_or_update_customer_is_sale(db: SessionLocal, customer_id: str, thread_id: str, is_sale: bool):
+    """Tạo mới hoặc cập nhật trạng thái is_sale của khách hàng"""
+    customer_sale_info = get_customer_is_sale(db, customer_id, thread_id)
+    
+    if customer_sale_info:
+        customer_sale_info.is_sale = is_sale
+    else:
+        customer_sale_info = CustomerisSale(
+            customer_id=customer_id,
+            thread_id=thread_id,
+            is_sale=is_sale
+        )
+        db.add(customer_sale_info)
+    
+    db.commit()
+    db.refresh(customer_sale_info)
+    return customer_sale_info
