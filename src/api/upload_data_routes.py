@@ -18,30 +18,30 @@ router = APIRouter()
 
 PRODUCT_COLUMNS_CONFIG = {
     'names': [
-        'Product code', 'Product name', 'category', 'PROPERTIES', 'amount',
-        'Giá bán buôn', 'trademark', 'guarantee', 'stock', 'description',
-        'Product photo', 'Product link'
+        'Mã sản phẩm', 'Tên sản phẩm', 'Danh mục', 'Thuộc tính', 'Giá bán lẻ',
+        'Giá bán buôn', 'Thương hiệu', 'Bảo hành', 'Tồn kho', 'Mô tả',
+        'Ảnh sản phẩm', 'Link sản phẩm'
     ],
-    'required': ['Product code', 'Product name'],
-    'id_field': 'Product code',
+    'required': ['Mã sản phẩm', 'Tên sản phẩm'],
+    'id_field': 'Mã sản phẩm',
     'numerics': {
-        'stock': int,
-        'amount': float,
+        'Tồn kho': int,
+        'Giá bán lẻ': float,
         'Giá bán buôn': float
     },
     'rename_map': {
-        'Product code': 'product_code',
-        'Product name': 'product_name',
-        'category': 'category',
-        'PROPERTIES': 'properties',
-        'amount': 'lifecare_price',
+        'Mã sản phẩm': 'product_code',
+        'Tên sản phẩm': 'product_name',
+        'Danh mục': 'category',
+        'Thuộc tính': 'properties',
+        'Giá bán lẻ': 'lifecare_price',
         'Giá bán buôn': 'sale_price',
-        'trademark': 'trademark',
-        'guarantee': 'guarantee',
-        'stock': 'inventory',
-        'description': 'specifications',
-        'Product photo': 'avatar_images',
-        'Product link': 'link_accessory'
+        'Thương hiệu': 'trademark',
+        'Bảo hành': 'guarantee',
+        'Tồn kho': 'inventory',
+        'Mô tả': 'specifications',
+        'Ảnh sản phẩm': 'avatar_images',
+        'Link sản phẩm': 'link_accessory'
     }
 }
 
