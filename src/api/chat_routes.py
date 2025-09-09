@@ -751,8 +751,8 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
         category=last_query["category"],
         properties=last_query["properties"],
         offset=new_offset,
-        strict_properties=True,
-        strict_category=True
+        strict_properties=False,
+        strict_category=False
     )
 
     history_text = format_history_text(history, limit=5)
