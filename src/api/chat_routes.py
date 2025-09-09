@@ -399,6 +399,10 @@ async def chat_endpoint(
                     parts.append(f"👉 {store_info['store_address']}.")
                 if store_info.get("store_phone"):
                     parts.append(f"👉 SĐT: {store_info['store_phone']}")
+                if store_info.get("store_website"):
+                    parts.append(f"👉 Website: {store_info['store_website']}")
+                if store_info.get("store_facebook"):
+                    parts.append(f"👉 Facebook: {store_info['store_facebook']}")
                 if store_info.get("store_address_map"):
                     parts.append(f"👉 Link google map: {store_info['store_address_map']}")
 
