@@ -56,7 +56,7 @@ def analyze_intent_and_extract_entities(user_query: str, history: list = None, m
       "search_params": {{
         "products": [
             {{
-                "product_name": "<Tên sản phẩm khách hàng đang đề cập bao gồm luôn cả tên thương hiệu và tên phụ kiện đi kèm>",
+                "product_name": "<Tên đầy đủ sản phẩm khách hàng đang đề cập bao gồm luôn cả tên thương hiệu và tên phụ kiện đi kèm, bạn phải dựa vào cả lịch sử chat để xác định chuẩn tên đầy đủ của sản phẩm khách hàng muốn hỏi>",
                 "category": "<Danh mục sản phẩm. Quy tắc: Nếu khách hỏi 'đèn kính hiển vi', category là 'đèn'. Nếu khách hỏi 'kính hiển vi', category là 'kính hiển vi'. Nếu khách hỏi 'kính hiển vi 2 mắt', category là 'kính hiển vi 2 mắt'. Nếu không thể xác định, hãy để category giống product_name.>",
                 "properties": "<Các thuộc tính cụ thể như model, màu sắc, loại, combo,... Lưu ý: Tên thương hiệu không phải thuộc tính, ví dụ: máy hàn GVM T210S, GVM H3 thì properties là ''(**không có thuộc tính**). Thuộc tính **chỉ có** khi khách đề cập rõ màu sắc, MODEL, hoặc loại cụ thể.>",
                 "quantity": <Số lượng, mặc định là 1>
