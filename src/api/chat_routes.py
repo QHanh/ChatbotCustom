@@ -188,7 +188,8 @@ async def chat_endpoint(
     
     analysis_result = analyze_intent_and_extract_entities(user_query, history, model_choice, api_key=api_key)
 
-    asking_for_more = is_asking_for_more(user_query)
+    history_text_for_more = format_history_text(history, limit=4)
+    asking_for_more = is_asking_for_more(user_query, history_text_for_more, api_key=api_key)
 
     retrieved_data, product_images = [], []
     response_text = ""
