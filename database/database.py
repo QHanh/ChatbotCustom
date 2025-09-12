@@ -165,3 +165,9 @@ def get_full_chat_history(db: SessionLocal, customer_id: str, thread_id: str):
         ChatHistory.customer_id == customer_id,
         ChatHistory.thread_id == thread_id
     ).order_by(ChatHistory.created_at.desc()).all()
+
+def get_sessions_for_timeout_check(db: SessionLocal):
+    """Lấy các session đang ở trạng thái cần handover để kiểm tra timeout."""
+    return db.query(SessionControl).filter(
+        SessionControl.status.in_(["human_calling", "human_chatting"])
+    ).all()

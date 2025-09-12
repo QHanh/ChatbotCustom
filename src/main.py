@@ -5,7 +5,7 @@ import time
 
 from src.config.settings import APP_CONFIG, CORS_CONFIG
 from src.models.schemas import ControlBotRequest
-from src.api.chat_routes import chat_endpoint, chat_history, chat_history_lock, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint, get_chat_history_endpoint
+from src.api.chat_routes import chat_endpoint, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint, get_chat_history_endpoint
 from dependencies import init_es_client, close_es_client, get_db
 from contextlib import asynccontextmanager
 from src.api import upload_data_routes, info_store_routes
@@ -49,43 +49,44 @@ def session_timeout_scanner():
     """
     Quét và reset các session bị timeout trong một luồng nền.
     """
-    from database.database import SessionLocal, get_session_control, create_or_update_session_control
+    from database.database import SessionLocal, create_or_update_session_control, get_sessions_for_timeout_check, add_chat_message
     
     while True:
         print("Chạy tác vụ nền: Quét các session timeout...")
-        with chat_history_lock:
+        db = SessionLocal()
+        try:
+            sessions_to_check = get_sessions_for_timeout_check(db)
             current_time = time.time()
-            sessions_to_reactivate = []
-            for session_id, session_data in chat_history.items():
-                if session_data.get("state") in ["human_calling", "human_chatting"]:
-                    handover_time = session_data.get("handover_timestamp", 0)
-                    if (current_time - handover_time) > HANDOVER_TIMEOUT:
-                        sessions_to_reactivate.append(session_id)
             
-            for session_id in sessions_to_reactivate:
-                print(f"Session {session_id} đã quá hạn. Kích hoạt lại bot.")
+            for session in sessions_to_check:
+                session_data = session.session_data or {}
+                handover_time = session_data.get("handover_timestamp", 0)
                 
-                # Parse customer_id và session_id từ composite_session_id
-                if "_" in session_id:
-                    parts = session_id.split("_", 1)
-                    if len(parts) == 2:
-                        customer_id, actual_session_id = parts
-                        
-                        # Cập nhật database
-                        try:
-                            db = SessionLocal()
-                            create_or_update_session_control(db, customer_id, actual_session_id, "active")
-                            db.close()
-                        except Exception as e:
-                            print(f"Lỗi khi cập nhật database cho session {session_id}: {e}")
-                
-                # Cập nhật memory state
-                chat_history[session_id]["state"] = None
-                chat_history[session_id]["negativity_score"] = 0
-                chat_history[session_id]["messages"].append({
-                    "user": "[SYSTEM]",
-                    "bot": "Bot đã được tự động kích hoạt lại do không có hoạt động."
-                })
+                if (current_time - handover_time) > HANDOVER_TIMEOUT:
+                    print(f"Session {session.id} đã quá hạn. Kích hoạt lại bot.")
+                    
+                    session_data["state"] = None
+                    session_data["negativity_score"] = 0
+                    
+                    create_or_update_session_control(
+                        db, 
+                        customer_id=session.customer_id, 
+                        session_id=session.session_id, 
+                        status="active",
+                        session_data=session_data
+                    )
+                    
+                    add_chat_message(
+                        db,
+                        customer_id=session.customer_id,
+                        thread_id=session.session_id,
+                        role="bot",
+                        message="Bot đã được tự động kích hoạt lại do không có hoạt động."
+                    )
+        except Exception as e:
+            print(f"Lỗi trong tác vụ nền quét session timeout: {e}")
+        finally:
+            db.close()
         
         time.sleep(300)
 
