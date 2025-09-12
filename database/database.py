@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import Boolean, create_engine, Column, String, DateTime
+from sqlalchemy import Boolean, create_engine, Column, String, DateTime, Integer, Text, JSON
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.sql import func
 from dotenv import load_dotenv
@@ -34,6 +34,7 @@ class SessionControl(Base):
     session_id = Column(String, nullable=False, index=True)
     session_name = Column(String, nullable=True)
     status = Column(String, nullable=False, default="active")  # active, stopped, human_chatting
+    session_data = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -43,6 +44,17 @@ class CustomerisSale(Base):
     customer_id = Column(String, primary_key=True, index=True)
     thread_id = Column(String, nullable=False, index=True)
     is_sale = Column(Boolean, nullable=False, default=False)
+    
+class ChatHistory(Base):
+    __tablename__ = 'chat_history'
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(String, index=True, nullable=False)
+    thread_id = Column(String, index=True, nullable=False)
+    thread_name = Column(String, nullable=True)
+    role = Column(String, nullable=False)  # 'user' or 'bot'
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -60,7 +72,7 @@ def get_session_control(db: SessionLocal, customer_id: str, session_id: str):
     composite_id = f"{customer_id}_{session_id}"
     return db.query(SessionControl).filter(SessionControl.id == composite_id).first()
 
-def create_or_update_session_control(db: SessionLocal, customer_id: str, session_id: str, status: str, session_name: str = None):
+def create_or_update_session_control(db: SessionLocal, customer_id: str, session_id: str, status: str, session_name: str = None, session_data: dict = None):
     """Tạo mới hoặc cập nhật session control"""
     composite_id = f"{customer_id}_{session_id}"
     session_control = db.query(SessionControl).filter(SessionControl.id == composite_id).first()
@@ -69,13 +81,16 @@ def create_or_update_session_control(db: SessionLocal, customer_id: str, session
         session_control.status = status
         if session_name:
             session_control.session_name = session_name
+        if session_data is not None:
+            session_control.session_data = session_data
     else:
         session_control = SessionControl(
             id=composite_id,
             customer_id=customer_id,
             session_id=session_id,
             session_name=session_name,
-            status=status
+            status=status,
+            session_data=session_data
         )
         db.add(session_control)
     
@@ -118,3 +133,35 @@ def create_or_update_customer_is_sale(db: SessionLocal, customer_id: str, thread
     db.commit()
     db.refresh(customer_sale_info)
     return customer_sale_info
+
+def add_chat_message(db: SessionLocal, customer_id: str, thread_id: str, role: str, message: str, thread_name: str = None):
+    """Thêm một tin nhắn vào lịch sử chat"""
+    if not message or not message.strip():
+        return
+    chat_message = ChatHistory(
+        customer_id=customer_id,
+        thread_id=thread_id,
+        thread_name=thread_name,
+        role=role,
+        message=message
+    )
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+    return chat_message
+
+def get_chat_history(db: SessionLocal, customer_id: str, thread_id: str, limit: int = 20):
+    """Lấy lịch sử chat từ database, sắp xếp theo thời gian gần nhất"""
+    history_records = db.query(ChatHistory).filter(
+        ChatHistory.customer_id == customer_id,
+        ChatHistory.thread_id == thread_id
+    ).order_by(ChatHistory.created_at.desc()).limit(limit).all()
+    history_records.reverse()
+    return history_records
+
+def get_full_chat_history(db: SessionLocal, customer_id: str, thread_id: str):
+    """Lấy toàn bộ lịch sử chat từ database, sắp xếp theo thời gian gần nhất."""
+    return db.query(ChatHistory).filter(
+        ChatHistory.customer_id == customer_id,
+        ChatHistory.thread_id == thread_id
+    ).order_by(ChatHistory.created_at.desc()).all()
