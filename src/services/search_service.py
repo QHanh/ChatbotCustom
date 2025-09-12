@@ -41,19 +41,26 @@ def search_products(customer_id: str, product_name: str = None, category: str = 
 
     if product_name:
         body["query"]["bool"]["must"].append({
-            "match": {
-                "product_name": {
-                    "query": product_name,
-                    "operator": "and"
-                }
-            }
-        })
-        body["query"]["bool"]["should"].append({
-            "match_phrase": {
-                "product_name": {
-                    "query": product_name,
-                    "boost": 10.0
-                }
+            "bool": {
+                "should": [
+                    {
+                        "match": {
+                            "product_name": {
+                                "query": product_name,
+                                "minimum_should_match": "75%"
+                            }
+                        }
+                    },
+                    {
+                        "match_phrase": {
+                            "product_name": {
+                                "query": product_name,
+                                "boost": 10.0
+                            }
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
             }
         })
 
