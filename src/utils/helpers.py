@@ -27,9 +27,21 @@ def is_asking_for_more(user_query: str, history_text: str, api_key: str = None) 
         - Ví dụ: "sản phẩm này còn hàng không?", "còn hàng không shop?", "còn ko?" (khi ngữ cảnh đang nói về 1 sản phẩm).
     3.  **OTHER**: Câu hỏi không thuộc hai loại trên.
 
-    ## Quy tắc quan trọng:
-    - Phải dựa vào **ngữ cảnh** của cuộc trò chuyện để phân biệt. Nếu trước đó bot vừa liệt kê một loạt sản phẩm, câu "còn không?" khả năng cao là **MORE_PRODUCTS**.
-    - Nếu trước đó bot và khách hàng đang trao đổi về một sản phẩm **duy nhất**, câu "còn không?" khả năng cao là **ASKING_INVENTORY**.
+    ## QUY TẮC PHÂN LOẠI (RẤT QUAN TRỌNG) ##
+
+    1.  **Khi nào là `MORE_PRODUCTS`?**
+        - CHỈ khi BỐI CẢNH cho thấy bot vừa liệt kê một danh sách sản phẩm (ví dụ: "Bên em có các loại máy hàn A, B, C..."), VÀ câu hỏi mới nhất của khách là một yêu cầu **tiếp tục danh sách đó**.
+        - Các câu hỏi mẫu: "còn không?", "còn loại nào nữa không?", "tiếp đi", "xem thêm", "kể tiếp đi".
+        - Ý định này là để **lật trang (pagination)** xem các sản phẩm **cùng loại** đã được tìm kiếm trước đó.
+
+    2.  **Khi nào KHÔNG PHẢI là `MORE_PRODUCTS`? (Sẽ là `OTHER`)**
+        - Nếu câu hỏi của khách hàng **giới thiệu một chủ đề hoặc loại sản phẩm mới** không có trong cuộc trò chuyện gần đây.
+        - **VÍ DỤ QUAN TRỌNG:** Nếu bot đang nói về "máy hàn", và khách hỏi "em tham khảo thêm cái giá đỡ và bộ đèn", đây là một yêu cầu tìm kiếm mới, KHÔNG PHẢI `MORE_PRODUCTS`.
+        - Nếu câu hỏi của khách hàng là một câu hỏi chung chung về sản phẩm mà không có ngữ cảnh liệt kê trước đó (ví dụ: "bên shop có những sản phẩm nào?").
+        - Nếu câu hỏi của khách hàng là "kể hết ra" nhưng bot chưa liệt kê sản phẩm nào cả.
+
+    3.  **Khi nào là `ASKING_INVENTORY`?**
+        - Khi cuộc trò chuyện đang tập trung vào MỘT sản phẩm cụ thể và khách hàng hỏi "còn hàng không?", "còn không?".
 
     Hãy trả về kết quả dưới dạng một đối tượng JSON duy nhất với cấu trúc:
     {{"intent": "MORE_PRODUCTS" | "ASKING_INVENTORY" | "OTHER"}}

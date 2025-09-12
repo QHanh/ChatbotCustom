@@ -43,7 +43,8 @@ def search_products(customer_id: str, product_name: str = None, category: str = 
         body["query"]["bool"]["must"].append({
             "match": {
                 "product_name": {
-                    "query": product_name
+                    "query": product_name,
+                    "operator": "and"
                 }
             }
         })

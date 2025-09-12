@@ -809,18 +809,29 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
         
     new_offset = session_data.get("offset", 0) + PAGE_SIZE
     sanitized_customer_id = sanitize_for_es(customer_id)
-    retrieved_data = search_products(
-        customer_id=sanitized_customer_id,
-        product_name=last_query["product_name"],
-        category=last_query["category"],
-        properties=last_query["properties"],
-        offset=new_offset,
-        strict_properties=False,
-        strict_category=False
-    )
+
+    all_new_products = []
+    products_to_search = last_query.get("products", [])
+
+    # Fallback for old last_query format
+    if not products_to_search and "product_name" in last_query:
+        products_to_search = [last_query]
+
+    for product_intent in products_to_search:
+        retrieved_data = search_products(
+            customer_id=sanitized_customer_id,
+            product_name=product_intent.get("product_name"),
+            category=product_intent.get("category"),
+            properties=product_intent.get("properties"),
+            offset=new_offset,
+            strict_properties=False,
+            strict_category=False
+        )
+        all_new_products.extend(retrieved_data)
 
     history_text = format_history_text(history, limit=5)
-    retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data, api_key=api_key)
+    # Lọc tất cả sản phẩm mới tìm được cùng lúc
+    retrieved_data = filter_products_with_ai(user_query, history_text, all_new_products, api_key=api_key)
     
     shown_keys = session_data.get("shown_product_keys", set())
     new_products = [p for p in retrieved_data if _get_product_key(p) not in shown_keys]
@@ -869,27 +880,38 @@ def _handle_new_query(customer_id: str, user_query: str, session_data: dict, his
         search_params = analysis.get("search_params", {})
         products_list = search_params.get("products", [])
         
+        all_retrieved_data = []
         if products_list:
-            first_product = products_list[0]
-            product_name_to_search = first_product.get("product_name", user_query)
-            category_to_search = first_product.get("category", user_query)
-            properties_to_search = first_product.get("properties")
-
-            retrieved_data = search_products(
-                customer_id=sanitized_customer_id,
-                product_name=product_name_to_search,
-                category=category_to_search,
-                properties=properties_to_search,
-                offset=0
-            )
-
             history_text = format_history_text(history, limit=5)
-            retrieved_data = filter_products_with_ai(user_query, history_text, retrieved_data, api_key=api_key)
+            
+            for product_intent in products_list:
+                product_name_to_search = product_intent.get("product_name", user_query)
+                category_to_search = product_intent.get("category", user_query)
+                properties_to_search = product_intent.get("properties")
 
+                # Tìm kiếm cho từng sản phẩm
+                found_products = search_products(
+                    customer_id=sanitized_customer_id,
+                    product_name=product_name_to_search,
+                    category=category_to_search,
+                    properties=properties_to_search,
+                    offset=0,
+                    strict_category=False,
+                    strict_properties=False
+                )
+                
+                # Lọc kết quả và thêm vào danh sách chung
+                if found_products:
+                    # Tạo một truy vấn con cho AI filter để nó hiểu ngữ cảnh của từng sản phẩm
+                    sub_user_query = f"{product_name_to_search} {properties_to_search or ''}".strip()
+                    filtered_products = filter_products_with_ai(sub_user_query, history_text, found_products, api_key=api_key)
+                    all_retrieved_data.extend(filtered_products)
+
+            retrieved_data = all_retrieved_data
+            
+            # Lưu lại toàn bộ danh sách sản phẩm đã tìm kiếm
             session_data["last_query"] = {
-                "product_name": product_name_to_search,
-                "category": category_to_search,
-                "properties": properties_to_search
+                "products": products_list
             }
             session_data["offset"] = 0
             session_data["shown_product_keys"] = {_get_product_key(p) for p in retrieved_data}
