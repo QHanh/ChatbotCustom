@@ -23,8 +23,8 @@ def read_chatbot_settings(
 
 @router.post("/settings/{customer_id}", response_model=ChatbotSettingsResponse)
 def create_or_update_settings(
-    customer_id: str = Path(..., title="Customer ID", description="The ID of the customer to create or update settings for"),
     settings_data: ChatbotSettingsCreate,
+    customer_id: str = Path(..., title="Customer ID", description="The ID of the customer to create or update settings for"),
     db: Session = Depends(get_db)
 ):
     """

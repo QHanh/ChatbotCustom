@@ -102,7 +102,7 @@ async def chat_endpoint(
     sanitized_customer_id = sanitize_for_es(customer_id)
     
     # Lấy lịch sử chat từ DB
-    db_history = get_chat_history(db, customer_id, session_id, limit=16)
+    db_history = get_chat_history(db, customer_id, session_id, limit=12)
     history = _format_db_history(db_history)
 
     # Kiểm tra khách hàng có phải là sale không
