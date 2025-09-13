@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, Depends, Form, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import threading
 import time
 
@@ -8,7 +9,7 @@ from src.models.schemas import ControlBotRequest
 from src.api.chat_routes import chat_endpoint, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint, get_chat_history_endpoint
 from dependencies import init_es_client, close_es_client, get_db
 from contextlib import asynccontextmanager
-from src.api import upload_data_routes, info_store_routes
+from src.api import upload_data_routes, info_store_routes, settings_routes
 import logging
 logging.getLogger("watchfiles").setLevel(logging.ERROR)
 from sqlalchemy.orm import Session
@@ -44,6 +45,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(**APP_CONFIG, lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, **CORS_CONFIG)
+
+# Phục vụ các tệp tĩnh từ thư mục JS_Chatbot/images
+app.mount("/images", StaticFiles(directory="JS_Chatbot/images"), name="images")
 
 def session_timeout_scanner():
     """
@@ -94,6 +98,7 @@ def session_timeout_scanner():
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
 app.include_router(customer_is_sale_routes.router)
+app.include_router(settings_routes.router, tags=["Chatbot Settings"])
 
 @app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(

@@ -26,6 +26,14 @@ class Customer(Base):
     store_image = Column(String, nullable=True)
     info_more = Column(String, nullable=True)
 
+class ChatbotSettings(Base):
+    __tablename__ = "chatbot_settings"
+
+    customer_id = Column(String, primary_key=True, index=True)
+    chatbot_icon_url = Column(String, nullable=True)
+    chatbot_message_default = Column(String, nullable=True)
+    chatbot_callout = Column(String, nullable=True)
+
 class SessionControl(Base):
     __tablename__ = "session_controls"
 
@@ -171,3 +179,26 @@ def get_sessions_for_timeout_check(db: SessionLocal):
     return db.query(SessionControl).filter(
         SessionControl.status.in_(["human_calling", "human_chatting"])
     ).all()
+
+# Helper functions for ChatbotSettings
+def get_chatbot_settings(db: SessionLocal, customer_id: str):
+    """Lấy thông tin cài đặt chatbot từ database"""
+    return db.query(ChatbotSettings).filter(ChatbotSettings.customer_id == customer_id).first()
+
+def create_or_update_chatbot_settings(db: SessionLocal, customer_id: str, settings_data: dict):
+    """Tạo mới hoặc cập nhật cài đặt chatbot"""
+    settings = db.query(ChatbotSettings).filter(ChatbotSettings.customer_id == customer_id).first()
+    
+    if settings:
+        for key, value in settings_data.items():
+            setattr(settings, key, value)
+    else:
+        settings = ChatbotSettings(
+            customer_id=customer_id,
+            **settings_data
+        )
+        db.add(settings)
+    
+    db.commit()
+    db.refresh(settings)
+    return settings
