@@ -33,6 +33,7 @@ class ChatbotSettings(Base):
     chatbot_icon_url = Column(String, nullable=True)
     chatbot_message_default = Column(String, nullable=True)
     chatbot_callout = Column(String, nullable=True)
+    chatbot_name = Column(String, nullable=True)
 
 class SessionControl(Base):
     __tablename__ = "session_controls"

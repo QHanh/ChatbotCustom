@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const iconUrl = settings?.chatbot_icon_url || 'https://chatbot.quandoiai.vn/icon2.png';
         const calloutMessage = settings?.chatbot_callout || '👋 Chào anh/chị, em là trợ lý AI của Hoàng Mai Mobile!';
         const defaultMessage = settings?.chatbot_message_default || 'Xin chào anh/chị, em là trợ lý AI của Hoàng Mai Mobile luôn sẵn sàng hỗ trợ anh/chị ạ!';
+        const chatbotName = settings?.chatbot_name || 'Hoàng Mai Mobile';
 
         container.innerHTML = `
             <div class="chatbot-button-container">
@@ -54,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="chatbot-window">
                 <div class="chatbot-header">
-                    Hoàng Mai Mobile
+                    ${chatbotName}
                     <span class="chatbot-minimize-btn">–</span>
                 </div>
                 <div class="chatbot-messages">
