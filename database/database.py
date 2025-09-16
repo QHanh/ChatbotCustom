@@ -12,6 +12,16 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def _make_json_safe(value):
+    """Recursively convert non-JSON-serializable types (e.g., set) into JSON-safe ones."""
+    if isinstance(value, set):
+        return list(value)
+    if isinstance(value, dict):
+        return {k: _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_make_json_safe(v) for v in value]
+    return value
+
 class Customer(Base):
     __tablename__ = "customers"
 
@@ -91,7 +101,7 @@ def create_or_update_session_control(db: SessionLocal, customer_id: str, session
         if session_name:
             session_control.session_name = session_name
         if session_data is not None:
-            session_control.session_data = session_data
+            session_control.session_data = _make_json_safe(session_data)
     else:
         session_control = SessionControl(
             id=composite_id,
@@ -99,7 +109,7 @@ def create_or_update_session_control(db: SessionLocal, customer_id: str, session
             session_id=session_id,
             session_name=session_name,
             status=status,
-            session_data=session_data
+            session_data=_make_json_safe(session_data) if session_data is not None else None
         )
         db.add(session_control)
     
