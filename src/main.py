@@ -170,6 +170,19 @@ async def power_off_bot(request: ControlBotRequest):
     """
     return await power_off_bot_endpoint(request)
 
+@app.post("/power-off-bot/{customer_id}", summary="Stop or start the bot for a specific customer")
+async def power_off_bot_customer(
+    customer_id: str,
+    request: ControlBotRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint to control the bot for a specific customer.
+    - **customer_id**: Mã khách hàng cần điều khiển bot.
+    - **command**: "start" để kích hoạt, "stop" để tạm dừng, "status" để kiểm tra trạng thái.
+    """
+    return await power_off_bot_customer_endpoint(customer_id, request, db)
+
 @app.get("/session-controls/{customer_id}", summary="Lấy danh sách session controls của customer")
 async def get_session_controls(
     customer_id: str,

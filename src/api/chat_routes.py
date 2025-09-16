@@ -17,7 +17,7 @@ from src.config.settings import PAGE_SIZE
 from src.services.response_service import evaluate_and_choose_product, evaluate_purchase_confirmation, filter_products_with_ai
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
-from database.database import get_session_control, create_or_update_session_control, get_customer_is_sale, add_chat_message, get_chat_history, get_full_chat_history
+from database.database import get_session_control, create_or_update_session_control, get_customer_is_sale, add_chat_message, get_chat_history, get_full_chat_history, get_all_session_controls_by_customer
 import time
 HANDOVER_TIMEOUT = 900
 
@@ -55,6 +55,23 @@ def _format_db_history(history_records: List[Any]) -> List[Dict[str, str]]:
         else:
             i += 1
     return paired_history
+
+def _get_customer_bot_status(db: Session, customer_id: str) -> str:
+    """
+    Kiểm tra trạng thái bot của customer dựa trên các session hiện có.
+    Trả về 'stopped' nếu tất cả sessions đều bị dừng, 'active' nếu ngược lại.
+    """
+    sessions = get_all_session_controls_by_customer(db, customer_id)
+    
+    if not sessions:
+        return "active"  # Mặc định là active nếu chưa có session nào
+    
+    # Nếu tất cả sessions đều bị stopped, thì customer bot bị stopped
+    stopped_sessions = [s for s in sessions if s.status == "stopped"]
+    if len(stopped_sessions) == len(sessions):
+        return "stopped"
+    
+    return "active"
 
 def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
     """Cập nhật trạng thái session trong cả database và memory"""
@@ -134,7 +151,26 @@ async def chat_endpoint(
             "pending_order": None
         }
     
-    session_status = session_control.status if session_control else "active"
+    # Nếu chưa có session control, kiểm tra trạng thái bot của customer
+    if session_control:
+        session_status = session_control.status
+    else:
+        # Kiểm tra xem customer có bot bị dừng không
+        customer_bot_status = _get_customer_bot_status(db, customer_id)
+        session_status = customer_bot_status
+        
+        # Tạo session mới với trạng thái phù hợp
+        if customer_bot_status == "stopped":
+            session_data["state"] = "stop_bot"
+            session_data["collected_customer_info"] = {}
+        
+        create_or_update_session_control(
+            db, 
+            customer_id=customer_id, 
+            session_id=session_id, 
+            status=session_status,
+            session_data=session_data
+        )
 
     # Kiểm tra trạng thái từ database
     if session_status == "stopped":
@@ -999,6 +1035,94 @@ async def power_off_bot_endpoint(request: ControlBotRequest):
             return {"status": "info", "message": status_message}
         else:
             raise HTTPException(status_code=400, detail="Invalid command. Use 'start' or 'stop'.")
+
+async def power_off_bot_customer_endpoint(customer_id: str, request: ControlBotRequest, db: Session):
+    """
+    Dừng hoặc khởi động bot cho một customer_id cụ thể.
+    """
+    command = request.command.lower()
+    
+    if command == "stop":
+        # Lấy tất cả sessions của customer và set status thành "stopped"
+        sessions = get_all_session_controls_by_customer(db, customer_id)
+        
+        if not sessions:
+            # Nếu chưa có session nào, tạo một session mặc định với status "stopped"
+            create_or_update_session_control(
+                db, 
+                customer_id=customer_id, 
+                session_id="default", 
+                status="stopped",
+                session_data={"state": "stop_bot", "collected_customer_info": {}}
+            )
+            return {"status": "success", "message": f"Bot đã được tạm dừng cho customer {customer_id}."}
+        
+        # Cập nhật tất cả sessions của customer thành "stopped"
+        for session in sessions:
+            session_data = session.session_data or {}
+            session_data["state"] = "stop_bot"
+            session_data["collected_customer_info"] = {}
+            
+            create_or_update_session_control(
+                db,
+                customer_id=customer_id,
+                session_id=session.session_id,
+                status="stopped",
+                session_data=session_data
+            )
+        
+        return {"status": "success", "message": f"Bot đã được tạm dừng cho customer {customer_id}. Đã cập nhật {len(sessions)} session(s)."}
+    
+    elif command == "start":
+        # Lấy tất cả sessions của customer và set status thành "active"
+        sessions = get_all_session_controls_by_customer(db, customer_id)
+        
+        if not sessions:
+            # Nếu chưa có session nào, tạo một session mặc định với status "active"
+            create_or_update_session_control(
+                db, 
+                customer_id=customer_id, 
+                session_id="default", 
+                status="active",
+                session_data={"state": None, "negativity_score": 0}
+            )
+            return {"status": "success", "message": f"Bot đã được kích hoạt cho customer {customer_id}."}
+        
+        # Cập nhật tất cả sessions của customer thành "active"
+        for session in sessions:
+            session_data = session.session_data or {}
+            session_data["state"] = None
+            session_data["negativity_score"] = 0
+            
+            create_or_update_session_control(
+                db,
+                customer_id=customer_id,
+                session_id=session.session_id,
+                status="active",
+                session_data=session_data
+            )
+        
+        return {"status": "success", "message": f"Bot đã được kích hoạt lại cho customer {customer_id}. Đã cập nhật {len(sessions)} session(s)."}
+    
+    elif command == "status":
+        # Kiểm tra trạng thái của tất cả sessions của customer
+        sessions = get_all_session_controls_by_customer(db, customer_id)
+        
+        if not sessions:
+            return {"status": "info", "message": f"Không tìm thấy session nào cho customer {customer_id}. Bot sẽ hoạt động bình thường."}
+        
+        stopped_sessions = [s for s in sessions if s.status == "stopped"]
+        active_sessions = [s for s in sessions if s.status == "active"]
+        other_sessions = [s for s in sessions if s.status not in ["stopped", "active"]]
+        
+        status_message = f"Customer {customer_id}: {len(active_sessions)} session(s) đang hoạt động, {len(stopped_sessions)} session(s) đã dừng"
+        if other_sessions:
+            status_message += f", {len(other_sessions)} session(s) ở trạng thái khác"
+        
+        return {"status": "info", "message": status_message}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid command. Use 'start', 'stop', or 'status'.")
 
 async def get_session_controls_endpoint(customer_id: str, db: Session):
     """
