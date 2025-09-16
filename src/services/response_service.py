@@ -132,8 +132,8 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
                 product_context += "  Tình trạng: Hết hàng\n"
             guarantee = item.get('guarantee')
             product_context += f"  Bảo hành: {guarantee}\n"
-            link_product = item.get('link_product')
-            product_context += f"  Link sản phẩm: {link_product}\n"
+            link_accessory = item.get('link_accessory')
+            product_context += f"  Link sản phẩm: {link_accessory}\n"
         else:
             product_context += "  Lưu ý: Sản phẩm này có nhiều thuộc tính khác nhau (ví dụ: loại, cỡ, model, màu,...). Các phiên bản có sẵn:\n"
             for item in sorted_items:
