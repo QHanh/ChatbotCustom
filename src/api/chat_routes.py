@@ -82,22 +82,32 @@ def _get_customer_bot_status(db: Session, customer_id: str) -> str:
 
 def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
     """Cập nhật trạng thái session trong cả database và memory"""
+    print(f"🔧 _update_session_state called: customer_id={customer_id}, session_id={session_id}, status={status}")
+    
     # Cập nhật memory state TRƯỚC KHI lưu vào database
     if status == "human_calling":
         session_data["state"] = "human_calling"
         session_data["handover_timestamp"] = time.time()
+        print(f"   ✅ Set session_data state = human_calling, handover_timestamp = {session_data['handover_timestamp']}")
     elif status == "active":
         session_data["state"] = None
         session_data["negativity_score"] = 0
+        print(f"   ✅ Set session_data state = None (active)")
     elif status == "stopped":
         session_data["state"] = "stop_bot"
         session_data["collected_customer_info"] = {}
+        print(f"   ✅ Set session_data state = stop_bot")
     elif status == "human_chatting":
         session_data["state"] = "human_chatting"
         session_data["handover_timestamp"] = time.time()
+        print(f"   ✅ Set session_data state = human_chatting, handover_timestamp = {session_data['handover_timestamp']}")
     
     # Cập nhật database với session_data đã được cập nhật
-    create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
+    print(f"   📊 Calling create_or_update_session_control with status={status}")
+    result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
+    print(f"   ✅ Database updated successfully. Session status in DB: {result.status}")
+    
+    return result
 
 async def chat_endpoint(
     customer_id: str,
@@ -279,6 +289,8 @@ async def chat_endpoint(
             return ChatResponse(reply="Dạ, em xin lỗi, em chưa xem được hình ảnh của mình ạ.", history=history)
     
     analysis_result = analyze_intent_and_extract_entities(user_query, history, model_choice, api_key=api_key)
+    print(f"🔍 Intent Analysis Result: {analysis_result}")
+    print(f"🎯 wants_human_agent: {analysis_result.get('wants_human_agent')}")
 
     history_text_for_more = format_history_text(history, limit=4)
     asking_for_more = is_asking_for_more(user_query, history_text_for_more, api_key=api_key)
@@ -638,6 +650,7 @@ async def chat_endpoint(
         )
     
     if analysis_result.get("wants_human_agent"):
+        print(f"🎯 WANTS_HUMAN_AGENT detected! Setting status to human_calling...")
         response_text = "Em đã báo nhân viên phụ trách, anh/chị vui lòng đợi để được hỗ trợ ngay ạ."
         _update_session_state(db, customer_id, session_id, "human_calling", session_data)
         
