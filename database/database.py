@@ -153,24 +153,43 @@ def create_or_update_session_control(db: SessionLocal, customer_id: str, session
     composite_id = f"{customer_id}_{session_id}"
     session_control = db.query(SessionControl).filter(SessionControl.id == composite_id).first()
     
+    print(f"🔧 create_or_update_session_control: {composite_id}")
+    print(f"   📊 Input status: {status}")
+    print(f"   📊 Input session_data state: {session_data.get('state') if session_data else None}")
+    
     if session_control:
+        print(f"   📝 Updating existing session")
+        print(f"   📝 Old status: {session_control.status}")
+        print(f"   📝 Old session_data state: {session_control.session_data.get('state') if session_control.session_data else None}")
+        
         session_control.status = status
         if session_name:
             session_control.session_name = session_name
         if session_data is not None:
-            session_control.session_data = _make_json_safe(session_data)
+            json_safe_data = _make_json_safe(session_data)
+            print(f"   📝 JSON safe data state: {json_safe_data.get('state')}")
+            session_control.session_data = json_safe_data
     else:
+        print(f"   📝 Creating new session")
+        json_safe_data = _make_json_safe(session_data) if session_data is not None else None
+        print(f"   📝 JSON safe data state: {json_safe_data.get('state') if json_safe_data else None}")
+        
         session_control = SessionControl(
             id=composite_id,
             customer_id=customer_id,
             session_id=session_id,
             session_name=session_name,
             status=status,
-            session_data=_make_json_safe(session_data) if session_data is not None else None
+            session_data=json_safe_data
         )
         db.add(session_control)
     
     db.commit()
+    db.refresh(session_control)
+    
+    print(f"   ✅ Final status in DB: {session_control.status}")
+    print(f"   ✅ Final session_data state in DB: {session_control.session_data.get('state') if session_control.session_data else None}")
+    
     return session_control
 
 def get_all_session_controls_by_customer(db: SessionLocal, customer_id: str):

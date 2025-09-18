@@ -108,9 +108,29 @@ def _update_session_state(db: Session, customer_id: str, session_id: str, status
     print(f"   📊 Session data to save: state={session_data.get('state')}, handover_timestamp={session_data.get('handover_timestamp')}")
     
     try:
-        result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
+        # Tạo một copy mới của session_data để tránh reference issues
+        session_data_copy = dict(session_data)
+        
+        result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data_copy)
         print(f"   ✅ Database updated successfully. Session status in DB: {result.status}")
         print(f"   ✅ Session data in DB: {result.session_data}")
+        
+        # Verify the state was actually updated in DB
+        db_state = result.session_data.get('state') if result.session_data else None
+        expected_state = session_data_copy.get('state')
+        
+        if db_state == expected_state:
+            print(f"   ✅ State verification passed: DB state = {db_state}")
+        else:
+            print(f"   ❌ State verification FAILED: Expected {expected_state}, but DB has {db_state}")
+            
+            # Force update again with explicit state
+            print(f"   🔄 Attempting force update...")
+            result.session_data = session_data_copy
+            db.commit()
+            db.refresh(result)
+            print(f"   🔄 After force update: {result.session_data.get('state')}")
+        
         return result
     except Exception as e:
         print(f"   ❌ Database update failed: {e}")
