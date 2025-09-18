@@ -17,7 +17,12 @@ from src.config.settings import PAGE_SIZE
 from src.services.response_service import evaluate_and_choose_product, evaluate_purchase_confirmation, filter_products_with_ai
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
-from database.database import get_session_control, create_or_update_session_control, get_customer_is_sale, add_chat_message, get_chat_history, get_full_chat_history, get_all_session_controls_by_customer
+from database.database import (
+    get_session_control, create_or_update_session_control, get_customer_is_sale, 
+    add_chat_message, get_chat_history, get_full_chat_history, get_all_session_controls_by_customer,
+    create_or_update_customer_profile, has_previous_orders, create_order, add_order_item,
+    get_customer_profile_by_phone, get_customer_order_history
+)
 import time
 HANDOVER_TIMEOUT = 900
 
@@ -359,17 +364,50 @@ async def chat_endpoint(
                 _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 
-            else:
                 response_text = "Dạ vâng, anh/chị muốn thêm sản phẩm nào vào đơn hàng ạ?"
                 _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
                 final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
                 return ChatResponse(reply=response_text, history=final_history)
         else:
+            # 1. Kiểm tra xem session này đã có profile/đơn hàng trước đây chưa
+            existing_profile = get_customer_profile(db, customer_id, session_id)
+            if existing_profile and has_previous_orders(db, customer_id, session_id=session_id):
+                # Khách hàng cũ - hiển thị thông tin để xác nhận
+                order_history = get_customer_order_history(db, customer_id, session_id=session_id)
+                last_order = order_history[0] if order_history else None
+
+                response_parts = []
+                response_parts.append(f"Dạ, em thấy anh/chị đã từng đặt hàng với thông tin:")
+                response_parts.append(f"👤 Tên: {existing_profile.name}")
+                response_parts.append(f"📞 SĐT: {existing_profile.phone}")
+                response_parts.append(f"📍 Địa chỉ: {existing_profile.address}")
+                
+                if last_order:
+                    response_parts.append(f"📦 Đơn hàng gần nhất: {last_order.created_at.strftime('%d/%m/%Y')}")
+                
+                response_parts.append("Anh/chị có muốn sử dụng thông tin này không ạ? Nếu có thay đổi gì thì cho em biết ạ.")
+                
+                response_text = "\n".join(response_parts)
+                
+                # Lưu thông tin cũ vào session để sử dụng
+                session_data["collected_customer_info"] = {
+                    "name": existing_profile.name,
+                    "phone": existing_profile.phone,
+                    "address": existing_profile.address
+                }
+                session_data["existing_profile_id"] = existing_profile.id
+                
+                _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
+                final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
+                return ChatResponse(reply=response_text, history=final_history, human_handover_required=False)
+            
+            # 2. Xử lý thông tin khách hàng (mới hoặc cập nhật)
             current_info = session_data.get("collected_customer_info", {})
             extracted_info = extract_customer_info(user_query, model_choice, api_key=api_key)
 
+            # Merge thông tin mới vào thông tin hiện có
             for key, value in extracted_info.items():
-                if value and not current_info.get(key):
+                if value and value.strip():
                     current_info[key] = value
 
             missing_info = []
@@ -387,6 +425,17 @@ async def chat_endpoint(
                 final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
                 return ChatResponse(reply=response_text, history=final_history, human_handover_required=False)
 
+            # 3. Đã có đủ thông tin - kiểm tra khách hàng cũ qua số điện thoại (nếu chưa có profile)
+            if not existing_profile and current_info.get("phone"):
+                phone_profile = get_customer_profile_by_phone(db, customer_id, current_info["phone"])
+                if phone_profile and has_previous_orders(db, customer_id, phone=current_info["phone"]):
+                    response_text = f"Dạ, em nhận ra anh/chị là khách hàng quen của shop rồi ạ! Anh/chị đã từng đặt hàng với số điện thoại này. Em sẽ cập nhật thông tin mới cho anh/chị."
+                    session_data["existing_profile_id"] = phone_profile.id
+                    _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
+                    final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
+                    # Không return ở đây, tiếp tục xử lý tạo đơn hàng
+
+            # 4. Tạo/cập nhật profile và đơn hàng
             if not missing_info:
                 pending_items = session_data.get("pending_purchase_item", [])
                 if not pending_items:
@@ -397,6 +446,26 @@ async def chat_endpoint(
                     final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
                     return ChatResponse(reply=response_text, history=final_history)
 
+                # Tạo/cập nhật customer profile
+                profile = create_or_update_customer_profile(
+                    db=db,
+                    customer_id=customer_id,
+                    session_id=session_id,
+                    name=current_info.get("name"),
+                    phone=current_info.get("phone"),
+                    address=current_info.get("address")
+                )
+
+                # Tạo đơn hàng
+                order = create_order(
+                    db=db,
+                    customer_profile_id=profile.id,
+                    customer_id=customer_id,
+                    session_id=session_id,
+                    order_status="confirmed"
+                )
+
+                # Thêm sản phẩm vào đơn hàng
                 purchase_items_obj = []
                 for item in pending_items:
                     item_data = item.get("evaluation", {}).get("product", {})
@@ -406,6 +475,16 @@ async def chat_endpoint(
                     if props_value is not None and str(props_value).strip() not in ['0', '']:
                         final_props = str(props_value)
                     
+                    # Thêm vào database
+                    add_order_item(
+                        db=db,
+                        order_id=order.id,
+                        product_name=item_data.get("product_name", "N/A"),
+                        properties=final_props,
+                        quantity=quantity
+                    )
+                    
+                    # Thêm vào response object
                     purchase_items_obj.append(PurchaseItem(
                         product_name=item_data.get("product_name", "N/A"),
                         properties=final_props,
@@ -419,7 +498,7 @@ async def chat_endpoint(
                     items=purchase_items_obj
                 )
                 
-                response_text = "Dạ em đã nhận được đầy đủ thông tin. Em cảm ơn anh/chị! /-heart"
+                response_text = f"Dạ em đã nhận được đầy đủ thông tin và tạo đơn hàng #{order.id} thành công. Em cảm ơn anh/chị! /-heart"
                 _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 session_data["has_past_purchase"] = True

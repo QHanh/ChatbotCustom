@@ -1,6 +1,6 @@
 import os
-from sqlalchemy import Boolean, create_engine, Column, String, DateTime, Integer, Text, JSON
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Boolean, create_engine, Column, String, DateTime, Integer, Text, JSON, Float, ForeignKey
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.sql import func
 from dotenv import load_dotenv
 
@@ -74,6 +74,55 @@ class ChatHistory(Base):
     role = Column(String, nullable=False)  # 'user' or 'bot'
     message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class CustomerProfile(Base):
+    __tablename__ = 'customer_profiles'
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(String, nullable=False, index=True)  # ID của cửa hàng
+    session_id = Column(String, nullable=False, index=True)   # ID của session/thread
+    name = Column(String, nullable=True)                      # Tên khách hàng
+    phone = Column(String, nullable=True, index=True)         # Số điện thoại
+    address = Column(Text, nullable=True)                     # Địa chỉ
+    email = Column(String, nullable=True)                     # Email (tùy chọn)
+    notes = Column(Text, nullable=True)                       # Ghi chú thêm
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationship với orders
+    orders = relationship("Order", back_populates="customer_profile")
+
+class Order(Base):
+    __tablename__ = 'orders'
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_profile_id = Column(Integer, ForeignKey('customer_profiles.id'), nullable=False)
+    customer_id = Column(String, nullable=False, index=True)  # ID của cửa hàng
+    session_id = Column(String, nullable=False, index=True)   # ID của session/thread
+    order_status = Column(String, nullable=False, default="pending")  # pending, confirmed, completed, cancelled
+    total_amount = Column(Float, nullable=True)               # Tổng tiền (tùy chọn)
+    notes = Column(Text, nullable=True)                       # Ghi chú đơn hàng
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationship
+    customer_profile = relationship("CustomerProfile", back_populates="orders")
+    order_items = relationship("OrderItem", back_populates="order")
+
+class OrderItem(Base):
+    __tablename__ = 'order_items'
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey('orders.id'), nullable=False)
+    product_name = Column(String, nullable=False)             # Tên sản phẩm
+    properties = Column(String, nullable=True)                # Thuộc tính sản phẩm (màu sắc, kích thước, etc.)
+    quantity = Column(Integer, nullable=False, default=1)     # Số lượng
+    unit_price = Column(Float, nullable=True)                 # Giá đơn vị (tùy chọn)
+    total_price = Column(Float, nullable=True)                # Tổng giá (tùy chọn)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    order = relationship("Order", back_populates="order_items")
     
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -213,3 +262,150 @@ def create_or_update_chatbot_settings(db: SessionLocal, customer_id: str, settin
     db.commit()
     db.refresh(settings)
     return settings
+
+# Helper functions for CustomerProfile
+def get_customer_profile(db: SessionLocal, customer_id: str, session_id: str = None, phone: str = None):
+    """Lấy thông tin profile khách hàng theo customer_id và session_id hoặc phone"""
+    query = db.query(CustomerProfile).filter(CustomerProfile.customer_id == customer_id)
+    
+    if session_id:
+        query = query.filter(CustomerProfile.session_id == session_id)
+    elif phone:
+        query = query.filter(CustomerProfile.phone == phone)
+    
+    return query.first()
+
+def get_customer_profile_by_phone(db: SessionLocal, customer_id: str, phone: str):
+    """Tìm profile khách hàng theo số điện thoại trong cùng cửa hàng"""
+    return db.query(CustomerProfile).filter(
+        CustomerProfile.customer_id == customer_id,
+        CustomerProfile.phone == phone
+    ).first()
+
+def create_or_update_customer_profile(db: SessionLocal, customer_id: str, session_id: str, 
+                                    name: str = None, phone: str = None, address: str = None, 
+                                    email: str = None, notes: str = None):
+    """Tạo mới hoặc cập nhật profile khách hàng"""
+    # Tìm profile hiện có theo session_id trước
+    profile = get_customer_profile(db, customer_id, session_id)
+    
+    # Nếu không tìm thấy và có phone, tìm theo phone
+    if not profile and phone:
+        profile = get_customer_profile_by_phone(db, customer_id, phone)
+        if profile:
+            # Cập nhật session_id mới cho profile cũ
+            profile.session_id = session_id
+    
+    if profile:
+        # Cập nhật thông tin (chỉ cập nhật nếu có giá trị mới)
+        if name and name.strip():
+            profile.name = name
+        if phone and phone.strip():
+            profile.phone = phone
+        if address and address.strip():
+            profile.address = address
+        if email and email.strip():
+            profile.email = email
+        if notes and notes.strip():
+            profile.notes = notes
+    else:
+        # Tạo mới
+        profile = CustomerProfile(
+            customer_id=customer_id,
+            session_id=session_id,
+            name=name,
+            phone=phone,
+            address=address,
+            email=email,
+            notes=notes
+        )
+        db.add(profile)
+    
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+def has_previous_orders(db: SessionLocal, customer_id: str, phone: str = None, session_id: str = None):
+    """Kiểm tra khách hàng đã từng đặt hàng chưa"""
+    if phone:
+        profile = get_customer_profile_by_phone(db, customer_id, phone)
+    elif session_id:
+        profile = get_customer_profile(db, customer_id, session_id)
+    else:
+        return False
+    
+    if not profile:
+        return False
+    
+    # Kiểm tra có đơn hàng nào không
+    order_count = db.query(Order).filter(Order.customer_profile_id == profile.id).count()
+    return order_count > 0
+
+# Helper functions for Order
+def create_order(db: SessionLocal, customer_profile_id: int, customer_id: str, session_id: str,
+                order_status: str = "pending", total_amount: float = None, notes: str = None):
+    """Tạo đơn hàng mới"""
+    order = Order(
+        customer_profile_id=customer_profile_id,
+        customer_id=customer_id,
+        session_id=session_id,
+        order_status=order_status,
+        total_amount=total_amount,
+        notes=notes
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    return order
+
+def get_orders_by_customer_profile(db: SessionLocal, customer_profile_id: int):
+    """Lấy tất cả đơn hàng của một customer profile"""
+    return db.query(Order).filter(Order.customer_profile_id == customer_profile_id).order_by(Order.created_at.desc()).all()
+
+def get_order_by_id(db: SessionLocal, order_id: int):
+    """Lấy đơn hàng theo ID"""
+    return db.query(Order).filter(Order.id == order_id).first()
+
+def update_order_status(db: SessionLocal, order_id: int, status: str):
+    """Cập nhật trạng thái đơn hàng"""
+    order = get_order_by_id(db, order_id)
+    if order:
+        order.order_status = status
+        db.commit()
+        db.refresh(order)
+    return order
+
+# Helper functions for OrderItem
+def add_order_item(db: SessionLocal, order_id: int, product_name: str, properties: str = None,
+                  quantity: int = 1, unit_price: float = None, total_price: float = None):
+    """Thêm sản phẩm vào đơn hàng"""
+    order_item = OrderItem(
+        order_id=order_id,
+        product_name=product_name,
+        properties=properties,
+        quantity=quantity,
+        unit_price=unit_price,
+        total_price=total_price
+    )
+    db.add(order_item)
+    db.commit()
+    db.refresh(order_item)
+    return order_item
+
+def get_order_items(db: SessionLocal, order_id: int):
+    """Lấy tất cả sản phẩm trong đơn hàng"""
+    return db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+
+def get_customer_order_history(db: SessionLocal, customer_id: str, phone: str = None, session_id: str = None):
+    """Lấy lịch sử đơn hàng của khách hàng"""
+    if phone:
+        profile = get_customer_profile_by_phone(db, customer_id, phone)
+    elif session_id:
+        profile = get_customer_profile(db, customer_id, session_id)
+    else:
+        return []
+    
+    if not profile:
+        return []
+    
+    return get_orders_by_customer_profile(db, profile.id)
