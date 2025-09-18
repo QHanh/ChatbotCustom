@@ -65,18 +65,36 @@ def session_timeout_scanner():
             sessions_to_check = get_sessions_for_timeout_check(db)
             current_time = time.time()
             
+            print(f"📊 Found {len(sessions_to_check)} sessions to check for timeout")
+            
             for session in sessions_to_check:
                 session_data = session.session_data or {}
                 handover_time = session_data.get("handover_timestamp")
+                state = session_data.get("state")
+                
+                print(f"🔍 Checking session {session.id}:")
+                print(f"   - Customer: {session.customer_id}")
+                print(f"   - Session ID: {session.session_id}")
+                print(f"   - Status: {session.status}")
+                print(f"   - State: {state}")
+                print(f"   - Handover timestamp: {handover_time}")
                 
                 # Fix 1: Kiểm tra handover_timestamp có tồn tại và hợp lệ không
                 if handover_time is None or handover_time == 0:
-                    print(f"Session {session.id} có handover_timestamp không hợp lệ, bỏ qua.")
+                    print(f"   ❌ Handover timestamp không hợp lệ, bỏ qua session này")
                     continue
                 
+                # Debug: In thông tin thời gian
+                elapsed_time = current_time - handover_time
+                print(f"   ⏰ Thời gian:")
+                print(f"      - Handover time: {handover_time}")
+                print(f"      - Current time: {current_time}")
+                print(f"      - Elapsed: {elapsed_time:.2f}s ({elapsed_time/60:.2f} phút)")
+                print(f"      - Timeout threshold: {HANDOVER_TIMEOUT}s ({HANDOVER_TIMEOUT/60:.2f} phút)")
+                
                 # Fix 2: Kiểm tra timeout với handover_timestamp hợp lệ
-                if (current_time - handover_time) > HANDOVER_TIMEOUT:
-                    print(f"Session {session.id} (customer: {session.customer_id}, session: {session.session_id}) đã quá hạn {HANDOVER_TIMEOUT}s. Kích hoạt lại bot.")
+                if elapsed_time > HANDOVER_TIMEOUT:
+                    print(f"   ✅ Session đã quá hạn, reset về active")
                     
                     # Fix 3: Sử dụng _update_session_state để đảm bảo sync đúng
                     _update_session_state(db, session.customer_id, session.session_id, "active", session_data)
@@ -91,6 +109,8 @@ def session_timeout_scanner():
                     )
                     
                     print(f"✅ Session {session.id} đã được reset về active.")
+                else:
+                    print(f"   ⏳ Session chưa quá hạn, còn {(HANDOVER_TIMEOUT - elapsed_time)/60:.2f} phút")
                     
         except Exception as e:
             print(f"Lỗi trong tác vụ nền quét session timeout: {e}")

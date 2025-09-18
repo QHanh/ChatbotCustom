@@ -244,9 +244,24 @@ def get_full_chat_history(db: SessionLocal, customer_id: str, thread_id: str):
 
 def get_sessions_for_timeout_check(db: SessionLocal):
     """Lấy các session đang ở trạng thái cần handover để kiểm tra timeout."""
-    return db.query(SessionControl).filter(
+    # Lấy tất cả sessions có status là human_calling hoặc human_chatting
+    sessions = db.query(SessionControl).filter(
         SessionControl.status.in_(["human_calling", "human_chatting"])
     ).all()
+    
+    # Filter thêm theo session_data.state nếu cần
+    filtered_sessions = []
+    for session in sessions:
+        session_data = session.session_data or {}
+        state = session_data.get("state")
+        
+        # Chỉ lấy sessions có state là human_calling hoặc human_chatting
+        if state in ["human_calling", "human_chatting"]:
+            filtered_sessions.append(session)
+        else:
+            print(f"⚠️ Session {session.id} có status={session.status} nhưng state={state}, bỏ qua")
+    
+    return filtered_sessions
 
 # Helper functions for ChatbotSettings
 def get_chatbot_settings(db: SessionLocal, customer_id: str):

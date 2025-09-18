@@ -83,6 +83,7 @@ def _get_customer_bot_status(db: Session, customer_id: str) -> str:
 def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
     """Cập nhật trạng thái session trong cả database và memory"""
     print(f"🔧 _update_session_state called: customer_id={customer_id}, session_id={session_id}, status={status}")
+    print(f"   📊 Session data before update: state={session_data.get('state')}, handover_timestamp={session_data.get('handover_timestamp')}")
     
     # Cập nhật memory state TRƯỚC KHI lưu vào database
     if status == "human_calling":
@@ -104,10 +105,16 @@ def _update_session_state(db: Session, customer_id: str, session_id: str, status
     
     # Cập nhật database với session_data đã được cập nhật
     print(f"   📊 Calling create_or_update_session_control with status={status}")
-    result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
-    print(f"   ✅ Database updated successfully. Session status in DB: {result.status}")
+    print(f"   📊 Session data to save: state={session_data.get('state')}, handover_timestamp={session_data.get('handover_timestamp')}")
     
-    return result
+    try:
+        result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
+        print(f"   ✅ Database updated successfully. Session status in DB: {result.status}")
+        print(f"   ✅ Session data in DB: {result.session_data}")
+        return result
+    except Exception as e:
+        print(f"   ❌ Database update failed: {e}")
+        raise
 
 async def chat_endpoint(
     customer_id: str,
