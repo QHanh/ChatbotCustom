@@ -251,15 +251,17 @@ def get_sessions_for_timeout_check(db: SessionLocal):
     
     # Filter thêm theo session_data.state nếu cần
     filtered_sessions = []
-    for session in sessions:
-        session_data = session.session_data or {}
-        state = session_data.get("state")
-        
-        # Chỉ lấy sessions có state là human_calling hoặc human_chatting
-        if state in ["human_calling", "human_chatting"]:
-            filtered_sessions.append(session)
-        else:
-            print(f"⚠️ Session {session.id} có status={session.status} nhưng state={state}, bỏ qua")
+    if not sessions:
+        sessions = db.query(SessionControl).all()
+        for session in sessions:
+            session_data = session.session_data or {}
+            state = session_data.get("state")
+            
+            # Chỉ lấy sessions có state là human_calling hoặc human_chatting
+            if state in ["human_calling", "human_chatting"]:
+                filtered_sessions.append(session)
+            else:
+                print(f"⚠️ Session {session.id} có status={session.status} nhưng state={state}, bỏ qua")
     
     return filtered_sessions
 
