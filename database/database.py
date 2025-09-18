@@ -45,6 +45,14 @@ class ChatbotSettings(Base):
     chatbot_callout = Column(String, nullable=True)
     chatbot_name = Column(String, nullable=True)
 
+class BotStatus(Base):
+    __tablename__ = "bot_status"
+
+    customer_id = Column(String, primary_key=True, index=True)
+    status = Column(String, nullable=False, default="active")  # active, stopped
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
 class SessionControl(Base):
     __tablename__ = "session_controls"
 
@@ -409,3 +417,41 @@ def get_customer_order_history(db: SessionLocal, customer_id: str, phone: str = 
         return []
     
     return get_orders_by_customer_profile(db, profile.id)
+
+# Helper functions for BotStatus
+def get_bot_status(db: SessionLocal, customer_id: str):
+    """Lấy trạng thái bot của customer"""
+    return db.query(BotStatus).filter(BotStatus.customer_id == customer_id).first()
+
+def create_or_update_bot_status(db: SessionLocal, customer_id: str, status: str):
+    """Tạo mới hoặc cập nhật trạng thái bot của customer"""
+    bot_status = get_bot_status(db, customer_id)
+    
+    if bot_status:
+        bot_status.status = status
+    else:
+        bot_status = BotStatus(
+            customer_id=customer_id,
+            status=status
+        )
+        db.add(bot_status)
+    
+    db.commit()
+    db.refresh(bot_status)
+    return bot_status
+
+def is_bot_active(db: SessionLocal, customer_id: str):
+    """Kiểm tra bot có đang active không"""
+    bot_status = get_bot_status(db, customer_id)
+    if not bot_status:
+        # Nếu chưa có record, mặc định là active
+        return True
+    return bot_status.status == "active"
+
+def power_off_bot_for_customer(db: SessionLocal, customer_id: str):
+    """Tắt bot cho customer (tất cả sessions)"""
+    return create_or_update_bot_status(db, customer_id, "stopped")
+
+def power_on_bot_for_customer(db: SessionLocal, customer_id: str):
+    """Bật bot cho customer (tất cả sessions)"""
+    return create_or_update_bot_status(db, customer_id, "active")

@@ -21,7 +21,9 @@ from database.database import (
     get_session_control, create_or_update_session_control, get_customer_is_sale, 
     add_chat_message, get_chat_history, get_full_chat_history, get_all_session_controls_by_customer,
     create_or_update_customer_profile, has_previous_orders, create_order, add_order_item,
-    get_customer_profile_by_phone, get_customer_order_history
+    get_customer_profile_by_phone, get_customer_order_history, get_customer_profile,
+    is_bot_active, power_off_bot_for_customer, power_on_bot_for_customer, get_bot_status,
+    ChatHistory
 )
 import time
 HANDOVER_TIMEOUT = 900
@@ -110,6 +112,14 @@ async def chat_endpoint(
     with bot_state_lock:
         if not bot_running:
             return ChatResponse(reply="", history=[], human_handover_required=False)
+    
+    # Kiểm tra trạng thái bot cho customer này
+    if not is_bot_active(db, customer_id):
+        return ChatResponse(
+            reply="Bot hiện đang tạm dừng cho customer này.", 
+            history=[], 
+            human_handover_required=False
+        )
     
     user_query = message
     model_choice = model_choice
@@ -1122,81 +1132,25 @@ async def power_off_bot_customer_endpoint(customer_id: str, request: ControlBotR
     command = request.command.lower()
     
     if command == "stop":
-        # Lấy tất cả sessions của customer và set status thành "stopped"
-        sessions = get_all_session_controls_by_customer(db, customer_id)
-        
-        if not sessions:
-            # Nếu chưa có session nào, tạo một session mặc định với status "stopped"
-            create_or_update_session_control(
-                db, 
-                customer_id=customer_id, 
-                session_id="default", 
-                status="stopped",
-                session_data={"state": "stop_bot", "collected_customer_info": {}}
-            )
-            return {"status": "success", "message": f"Bot đã được tạm dừng cho customer {customer_id}."}
-        
-        # Cập nhật tất cả sessions của customer thành "stopped"
-        for session in sessions:
-            session_data = session.session_data or {}
-            session_data["state"] = "stop_bot"
-            session_data["collected_customer_info"] = {}
-            
-            create_or_update_session_control(
-                db,
-                customer_id=customer_id,
-                session_id=session.session_id,
-                status="stopped",
-                session_data=session_data
-            )
-        
-        return {"status": "success", "message": f"Bot đã được tạm dừng cho customer {customer_id}. Đã cập nhật {len(sessions)} session(s)."}
+        # Tắt bot cho customer trong bảng BotStatus
+        power_off_bot_for_customer(db, customer_id)
+        return {"status": "success", "message": f"Bot đã được tắt cho customer {customer_id}. Tất cả sessions của customer này sẽ không hoạt động."}
     
     elif command == "start":
-        # Lấy tất cả sessions của customer và set status thành "active"
-        sessions = get_all_session_controls_by_customer(db, customer_id)
-        
-        if not sessions:
-            # Nếu chưa có session nào, tạo một session mặc định với status "active"
-            create_or_update_session_control(
-                db, 
-                customer_id=customer_id, 
-                session_id="default", 
-                status="active",
-                session_data={"state": None, "negativity_score": 0}
-            )
-            return {"status": "success", "message": f"Bot đã được kích hoạt cho customer {customer_id}."}
-        
-        # Cập nhật tất cả sessions của customer thành "active"
-        for session in sessions:
-            session_data = session.session_data or {}
-            session_data["state"] = None
-            session_data["negativity_score"] = 0
-            
-            create_or_update_session_control(
-                db,
-                customer_id=customer_id,
-                session_id=session.session_id,
-                status="active",
-                session_data=session_data
-            )
-        
-        return {"status": "success", "message": f"Bot đã được kích hoạt lại cho customer {customer_id}. Đã cập nhật {len(sessions)} session(s)."}
+        # Bật bot cho customer trong bảng BotStatus
+        power_on_bot_for_customer(db, customer_id)
+        return {"status": "success", "message": f"Bot đã được bật cho customer {customer_id}. Tất cả sessions của customer này sẽ hoạt động bình thường."}
     
     elif command == "status":
-        # Kiểm tra trạng thái của tất cả sessions của customer
+        # Kiểm tra trạng thái bot của customer từ bảng BotStatus
+        bot_active = is_bot_active(db, customer_id)
         sessions = get_all_session_controls_by_customer(db, customer_id)
         
-        if not sessions:
-            return {"status": "info", "message": f"Không tìm thấy session nào cho customer {customer_id}. Bot sẽ hoạt động bình thường."}
-        
-        stopped_sessions = [s for s in sessions if s.status == "stopped"]
-        active_sessions = [s for s in sessions if s.status == "active"]
-        other_sessions = [s for s in sessions if s.status not in ["stopped", "active"]]
-        
-        status_message = f"Customer {customer_id}: {len(active_sessions)} session(s) đang hoạt động, {len(stopped_sessions)} session(s) đã dừng"
-        if other_sessions:
-            status_message += f", {len(other_sessions)} session(s) ở trạng thái khác"
+        status_message = f"Customer {customer_id}: Bot {'ĐANG HOẠT ĐỘNG' if bot_active else 'ĐÃ TẮT'}"
+        if sessions:
+            status_message += f" - Có {len(sessions)} session(s) trong hệ thống"
+        else:
+            status_message += " - Chưa có session nào"
         
         return {"status": "info", "message": status_message}
     
@@ -1246,3 +1200,100 @@ async def get_chat_history_endpoint(customer_id: str, session_id: str, db: Sessi
         })
         
     return {"status": "success", "data": result}
+
+async def get_bot_status_endpoint(customer_id: str, db: Session):
+    """
+    Lấy trạng thái bot của customer_id.
+    """
+    try:
+        bot_status = get_bot_status(db, customer_id)
+        is_active = is_bot_active(db, customer_id)
+        
+        if bot_status:
+            return {
+                "status": "success",
+                "data": {
+                    "customer_id": customer_id,
+                    "bot_status": bot_status.status,
+                    "is_active": is_active,
+                    "created_at": bot_status.created_at.isoformat(),
+                    "updated_at": bot_status.updated_at.isoformat() if bot_status.updated_at else None
+                }
+            }
+        else:
+            return {
+                "status": "success",
+                "data": {
+                    "customer_id": customer_id,
+                    "bot_status": "active",  # Mặc định
+                    "is_active": is_active,
+                    "created_at": None,
+                    "updated_at": None,
+                    "note": "Chưa có record trong database, trạng thái mặc định là active"
+                }
+            }
+    except Exception as e:
+        return {"status": "error", "message": f"Lỗi khi lấy trạng thái bot: {str(e)}"}
+
+async def delete_chat_history_endpoint(customer_id: str, session_id: str, db: Session):
+    """
+    Xóa lịch sử chat của session_id thuộc customer_id.
+    """
+    try:
+        # Kiểm tra xem session có tồn tại không
+        session_control = get_session_control(db, customer_id, session_id)
+        if not session_control:
+            return {
+                "status": "error", 
+                "message": f"Không tìm thấy session {session_id} cho customer {customer_id}"
+            }
+        
+        # Đếm số tin nhắn trước khi xóa
+        message_count = db.query(ChatHistory).filter(
+            ChatHistory.customer_id == customer_id,
+            ChatHistory.thread_id == session_id
+        ).count()
+        
+        if message_count == 0:
+            return {
+                "status": "info",
+                "message": f"Session {session_id} không có lịch sử chat nào để xóa"
+            }
+        
+        # Xóa tất cả tin nhắn của session
+        deleted_count = db.query(ChatHistory).filter(
+            ChatHistory.customer_id == customer_id,
+            ChatHistory.thread_id == session_id
+        ).delete()
+        
+        # Reset session data
+        if session_control.session_data:
+            session_control.session_data = {
+                "messages": [],
+                "last_query": None,
+                "offset": 0,
+                "shown_product_keys": set(),
+                "state": None,
+                "pending_purchase_item": None,
+                "negativity_score": 0,
+                "handover_timestamp": None,
+                "collected_customer_info": {},
+                "has_past_purchase": False,
+                "pending_order": None
+            }
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Đã xóa {deleted_count} tin nhắn từ session {session_id} của customer {customer_id}",
+            "data": {
+                "customer_id": customer_id,
+                "session_id": session_id,
+                "deleted_messages": deleted_count
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": f"Lỗi khi xóa lịch sử chat: {str(e)}"}

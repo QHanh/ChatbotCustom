@@ -8,6 +8,7 @@ from src.config.settings import APP_CONFIG, CORS_CONFIG
 from src.models.schemas import ControlBotRequest
 from src.api.chat_routes import chat_endpoint, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint, get_chat_history_endpoint
 from dependencies import init_es_client, close_es_client, get_db
+from src.api.chat_routes import power_off_bot_customer_endpoint, get_bot_status_endpoint, delete_chat_history_endpoint
 from contextlib import asynccontextmanager
 from src.api import upload_data_routes, info_store_routes, settings_routes
 import logging
@@ -206,6 +207,40 @@ async def get_chat_history(
     - **session_id**: ID của thread/session.
     """
     return await get_chat_history_endpoint(customer_id, session_id, db)
+
+@app.get("/bot-status/{customer_id}", summary="Lấy trạng thái bot của customer")
+async def get_bot_status(
+    customer_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint để lấy trạng thái bot của một customer cụ thể.
+    - **customer_id**: Mã khách hàng cần kiểm tra trạng thái bot.
+    
+    Returns:
+    - **bot_status**: "active" hoặc "stopped"
+    - **is_active**: True/False
+    - **created_at**: Thời gian tạo record (nếu có)
+    - **updated_at**: Thời gian cập nhật gần nhất (nếu có)
+    """
+    return await get_bot_status_endpoint(customer_id, db)
+
+@app.delete("/chat-history/{customer_id}/{session_id}", summary="Xóa lịch sử chat của session")
+async def delete_chat_history(
+    customer_id: str,
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint để xóa toàn bộ lịch sử chat của một session cụ thể.
+    - **customer_id**: Mã khách hàng.
+    - **session_id**: ID của session/thread cần xóa lịch sử.
+    
+    Returns:
+    - **deleted_messages**: Số lượng tin nhắn đã xóa
+    - Đồng thời reset session data về trạng thái ban đầu
+    """
+    return await delete_chat_history_endpoint(customer_id, session_id, db)
 
 if __name__ == "__main__":
     import uvicorn
