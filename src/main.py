@@ -9,6 +9,7 @@ from src.models.schemas import ControlBotRequest
 from src.api.chat_routes import chat_endpoint, HANDOVER_TIMEOUT, control_bot_endpoint, human_chatting_endpoint, power_off_bot_endpoint, get_session_controls_endpoint, get_chat_history_endpoint
 from dependencies import init_es_client, close_es_client, get_db
 from src.api.chat_routes import power_off_bot_customer_endpoint, get_bot_status_endpoint, delete_chat_history_endpoint
+from src.api.order_routes import router as order_router
 from contextlib import asynccontextmanager
 from src.api import upload_data_routes, info_store_routes, settings_routes
 import logging
@@ -100,6 +101,7 @@ app.include_router(upload_data_routes.router, tags=["Upload Data"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
 app.include_router(customer_is_sale_routes.router)
 app.include_router(settings_routes.router, tags=["Chatbot Settings"])
+app.include_router(order_router)
 
 @app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(
