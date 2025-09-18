@@ -147,16 +147,18 @@ async def chat_endpoint(
     session_control = get_session_control(db, customer_id, session_id)
     if session_control and session_control.session_data:
         session_data = session_control.session_data
-        # JSON không lưu set, cần chuyển lại
+        # Đảm bảo shown_product_keys luôn là list để tránh lỗi JSON serialization
         if 'shown_product_keys' in session_data and session_data['shown_product_keys'] is not None:
-            session_data['shown_product_keys'] = set(session_data['shown_product_keys'])
+            # Đảm bảo là list, không phải set
+            if isinstance(session_data['shown_product_keys'], set):
+                session_data['shown_product_keys'] = list(session_data['shown_product_keys'])
         else:
-            session_data['shown_product_keys'] = set()
+            session_data['shown_product_keys'] = []
     else:
         session_data = {
             "last_query": None,
             "offset": 0,
-            "shown_product_keys": set(),
+            "shown_product_keys": [],  # Sử dụng list thay vì set
             "state": None, 
             "pending_purchase_item": None,
             "negativity_score": 0,
@@ -812,7 +814,7 @@ async def chat_endpoint(
             customer_id, user_query, session_data, history, model_choice, analysis_result, db, api_key=api_key
         )
     else:
-        session_data["shown_product_keys"] = set()
+        session_data["shown_product_keys"] = []  # Sử dụng list thay vì set
         response_text, retrieved_data, product_images = _handle_new_query(
             customer_id, user_query, session_data, history, model_choice, analysis_result, db, api_key=api_key
         )
@@ -958,7 +960,7 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
     # Lọc tất cả sản phẩm mới tìm được cùng lúc
     retrieved_data = filter_products_with_ai(user_query, history_text, all_new_products, api_key=api_key)
     
-    shown_keys = session_data.get("shown_product_keys", set())
+    shown_keys = set(session_data.get("shown_product_keys", []))  # Convert list to set for checking
     new_products = [p for p in retrieved_data if _get_product_key(p) not in shown_keys]
 
     if not new_products:
@@ -968,8 +970,11 @@ def _handle_more_products(customer_id: str, user_query: str, session_data: dict,
 
 
 
+    # Thêm product keys mới vào list (tránh duplicate)
     for p in new_products:
-        shown_keys.add(_get_product_key(p))
+        product_key = _get_product_key(p)
+        if product_key not in session_data["shown_product_keys"]:
+            session_data["shown_product_keys"].append(product_key)
 
     # Kiểm tra is_sale
     session_id = session_data.get("session_id", "")
@@ -1039,11 +1044,11 @@ def _handle_new_query(customer_id: str, user_query: str, session_data: dict, his
                 "products": products_list
             }
             session_data["offset"] = 0
-            session_data["shown_product_keys"] = {_get_product_key(p) for p in retrieved_data}
+            session_data["shown_product_keys"] = [_get_product_key(p) for p in retrieved_data]  # Sử dụng list thay vì set
         else:
             session_data["last_query"] = None
             session_data["offset"] = 0
-            session_data["shown_product_keys"] = set()
+            session_data["shown_product_keys"] = []  # Sử dụng list thay vì set
 
     # Kiểm tra is_sale
     session_id = session_data.get("session_id", "")
@@ -1272,7 +1277,7 @@ async def delete_chat_history_endpoint(customer_id: str, session_id: str, db: Se
                 "messages": [],
                 "last_query": None,
                 "offset": 0,
-                "shown_product_keys": set(),
+                "shown_product_keys": [],  # Sử dụng list thay vì set để tránh lỗi JSON serialization
                 "state": None,
                 "pending_purchase_item": None,
                 "negativity_score": 0,
