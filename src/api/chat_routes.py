@@ -81,10 +81,7 @@ def _get_customer_bot_status(db: Session, customer_id: str) -> str:
     return "active"
 
 def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
-    """Cập nhật trạng thái session trong cả database và memory"""
-    print(f"🔧 _update_session_state called: customer_id={customer_id}, session_id={session_id}, status={status}")
-    print(f"   📊 Session data before update: state={session_data.get('state')}, handover_timestamp={session_data.get('handover_timestamp')}")
-    
+    """Cập nhật trạng thái session trong cả database và memory"""   
     # Cập nhật memory state TRƯỚC KHI lưu vào database
     if status == "human_calling":
         session_data["state"] = "human_calling"
@@ -103,33 +100,21 @@ def _update_session_state(db: Session, customer_id: str, session_id: str, status
         session_data["handover_timestamp"] = time.time()
         print(f"   ✅ Set session_data state = human_chatting, handover_timestamp = {session_data['handover_timestamp']}")
     
-    # Cập nhật database với session_data đã được cập nhật
-    print(f"   📊 Calling create_or_update_session_control with status={status}")
-    print(f"   📊 Session data to save: state={session_data.get('state')}, handover_timestamp={session_data.get('handover_timestamp')}")
-    
+    # Cập nhật database với session_data đã được cập nhật   
     try:
         # Tạo một copy mới của session_data để tránh reference issues
         session_data_copy = dict(session_data)
         
         result = create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data_copy)
-        print(f"   ✅ Database updated successfully. Session status in DB: {result.status}")
-        print(f"   ✅ Session data in DB: {result.session_data}")
         
         # Verify the state was actually updated in DB
         db_state = result.session_data.get('state') if result.session_data else None
         expected_state = session_data_copy.get('state')
         
-        if db_state == expected_state:
-            print(f"   ✅ State verification passed: DB state = {db_state}")
-        else:
-            print(f"   ❌ State verification FAILED: Expected {expected_state}, but DB has {db_state}")
-            
-            # Force update again with explicit state
-            print(f"   🔄 Attempting force update...")
+        if db_state != expected_state:
             result.session_data = session_data_copy
             db.commit()
             db.refresh(result)
-            print(f"   🔄 After force update: {result.session_data.get('state')}")
         
         return result
     except Exception as e:
