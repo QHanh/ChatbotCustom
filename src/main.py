@@ -55,7 +55,8 @@ def session_timeout_scanner():
     """
     Quét và reset các session bị timeout trong một luồng nền.
     """
-    from database.database import SessionLocal, create_or_update_session_control, get_sessions_for_timeout_check, add_chat_message
+    from database.database import SessionLocal, get_sessions_for_timeout_check, add_chat_message
+    from src.api.chat_routes import _update_session_state
     
     while True:
         print("Chạy tác vụ nền: Quét các session timeout...")
@@ -66,29 +67,31 @@ def session_timeout_scanner():
             
             for session in sessions_to_check:
                 session_data = session.session_data or {}
-                handover_time = session_data.get("handover_timestamp", 0)
+                handover_time = session_data.get("handover_timestamp")
                 
+                # Fix 1: Kiểm tra handover_timestamp có tồn tại và hợp lệ không
+                if handover_time is None or handover_time == 0:
+                    print(f"Session {session.id} có handover_timestamp không hợp lệ, bỏ qua.")
+                    continue
+                
+                # Fix 2: Kiểm tra timeout với handover_timestamp hợp lệ
                 if (current_time - handover_time) > HANDOVER_TIMEOUT:
-                    print(f"Session {session.id} đã quá hạn. Kích hoạt lại bot.")
+                    print(f"Session {session.id} (customer: {session.customer_id}, session: {session.session_id}) đã quá hạn {HANDOVER_TIMEOUT}s. Kích hoạt lại bot.")
                     
-                    session_data["state"] = None
-                    session_data["negativity_score"] = 0
+                    # Fix 3: Sử dụng _update_session_state để đảm bảo sync đúng
+                    _update_session_state(db, session.customer_id, session.session_id, "active", session_data)
                     
-                    create_or_update_session_control(
-                        db, 
-                        customer_id=session.customer_id, 
-                        session_id=session.session_id, 
-                        status="active",
-                        session_data=session_data
-                    )
-                    
+                    # Thêm tin nhắn thông báo
                     add_chat_message(
                         db,
                         customer_id=session.customer_id,
                         thread_id=session.session_id,
                         role="bot",
-                        message="Bot đã được tự động kích hoạt lại do không có hoạt động."
+                        message="Bot đã được tự động kích hoạt lại do không có hoạt động từ nhân viên trong 15 phút."
                     )
+                    
+                    print(f"✅ Session {session.id} đã được reset về active.")
+                    
         except Exception as e:
             print(f"Lỗi trong tác vụ nền quét session timeout: {e}")
         finally:

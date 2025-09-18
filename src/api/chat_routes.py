@@ -82,10 +82,7 @@ def _get_customer_bot_status(db: Session, customer_id: str) -> str:
 
 def _update_session_state(db: Session, customer_id: str, session_id: str, status: str, session_data: dict):
     """Cập nhật trạng thái session trong cả database và memory"""
-    # Cập nhật database
-    create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
-    
-    # Cập nhật memory state
+    # Cập nhật memory state TRƯỚC KHI lưu vào database
     if status == "human_calling":
         session_data["state"] = "human_calling"
         session_data["handover_timestamp"] = time.time()
@@ -98,6 +95,9 @@ def _update_session_state(db: Session, customer_id: str, session_id: str, status
     elif status == "human_chatting":
         session_data["state"] = "human_chatting"
         session_data["handover_timestamp"] = time.time()
+    
+    # Cập nhật database với session_data đã được cập nhật
+    create_or_update_session_control(db, customer_id, session_id, status=status, session_data=session_data)
 
 async def chat_endpoint(
     customer_id: str,
