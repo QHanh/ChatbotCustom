@@ -376,7 +376,7 @@ async def chat_endpoint(
                     for item in pending_items:
                         item_data = item.get("evaluation", {}).get("product", {})
                         quantity = item.get("intent", {}).get("quantity", 1)
-                        price = item_data.get("price", 0)
+                        price = item_data.get("lifecare_price", 0)
                         
                         # Chuyển đổi price từ string sang float nếu cần
                         if isinstance(price, str):
