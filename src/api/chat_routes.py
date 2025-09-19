@@ -365,12 +365,70 @@ async def chat_endpoint(
                     items=purchase_items
                 )
                 
-                confirmed_names = [f"{item.quantity} x {item.product_name}" for item in purchase_items]
-                response_text = f"Dạ em đã nhận được thông tin cho các sản phẩm: {', '.join(confirmed_names)}. Em sẽ tạo một đơn hàng mới cho mình ạ. Em cảm ơn anh/chị! /-heart"
+                # Tạo đơn hàng trong database
+                try:
+                    # Tạo hoặc cập nhật customer profile
+                    create_or_update_customer_profile(
+                        db,
+                        customer_id=customer_id,
+                        name=collected_info.get("name"),
+                        phone=collected_info.get("phone"),
+                        address=collected_info.get("address")
+                    )
+                    
+                    # Tạo đơn hàng mới
+                    order = create_order(
+                        db,
+                        customer_id=customer_id,
+                        customer_name=collected_info.get("name"),
+                        customer_phone=collected_info.get("phone"),
+                        customer_address=collected_info.get("address"),
+                        total_amount=0  # Sẽ được tính sau khi thêm items
+                    )
+                    
+                    # Thêm các items vào đơn hàng
+                    total_amount = 0
+                    for item in pending_items:
+                        item_data = item.get("evaluation", {}).get("product", {})
+                        quantity = item.get("intent", {}).get("quantity", 1)
+                        price = item_data.get("price", 0)
+                        
+                        # Chuyển đổi price từ string sang float nếu cần
+                        if isinstance(price, str):
+                            try:
+                                price = float(price.replace(",", "").replace(".", ""))
+                            except:
+                                price = 0
+                        
+                        item_total = price * quantity
+                        total_amount += item_total
+                        
+                        add_order_item(
+                            db,
+                            order_id=order.id,
+                            product_name=item_data.get("product_name", "N/A"),
+                            properties=item_data.get("properties", ""),
+                            quantity=quantity,
+                            price=price
+                        )
+                    
+                    # Cập nhật tổng tiền đơn hàng
+                    order.total_amount = total_amount
+                    db.commit()
+                    
+                    confirmed_names = [f"{item.quantity} x {item.product_name}" for item in purchase_items]
+                    response_text = f"Dạ em đã nhận được thông tin và tạo đơn hàng cho các sản phẩm: {', '.join(confirmed_names)}. Tổng tiền: {total_amount:,.0f}đ. Em cảm ơn anh/chị! /-heart"
+                    
+                    print(f"✅ Đã tạo đơn hàng #{order.id} cho customer {customer_id} với {len(purchase_items)} sản phẩm")
+                    
+                except Exception as e:
+                    print(f"❌ Lỗi khi tạo đơn hàng: {e}")
+                    confirmed_names = [f"{item.quantity} x {item.product_name}" for item in purchase_items]
+                    response_text = f"Dạ em đã nhận được thông tin cho các sản phẩm: {', '.join(confirmed_names)}. Em sẽ xử lý đơn hàng và liên hệ lại với anh/chị sớm nhất. Em cảm ơn anh/chị! /-heart"
                 
                 _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
-                session_data["has_past_purchase"] = True
+                session_data["has_past_purchase"] = True 
                 
                 _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
                 final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
@@ -384,7 +442,7 @@ async def chat_endpoint(
                 )
             else:
                 response_text = (
-                    f"Dạ vâng ạ. Vậy để đặt đơn hàng, anh/chị có thể vào đường link sản phẩm để đặt hàng hoặc đến xem trực tiếp tại cửa hàng chúng em tại số 8 ngõ 117 Thái Hà, Đống Đa, Hà Nội (thời gian mở cửa từ 8h đến 18h).\n"
+                    f"Dạ vâng ạ. Vậy để đặt đơn hàng, anh/chị có thể vào đường link sản phẩm để đặt hàng hoặc đến xem trực tiếp tại cửa hàng chúng em.\n"
                     "\nDạ anh/chị vui lòng cho em xin tên, số điện thoại và địa chỉ để em lên đơn cho anh/chị ạ. /-ok\n"
                     "Em cảm ơn anh/chị nhiều ạ. /-heart"
                 )
@@ -549,7 +607,7 @@ async def chat_endpoint(
                     items=purchase_items_obj
                 )
                 
-                response_text = f"Dạ em đã nhận được đầy đủ thông tin và tạo đơn hàng #{order.id} thành công. Em cảm ơn anh/chị! /-heart"
+                response_text = f"Dạ em đã nhận được đầy đủ thông tin và tạo đơn hàng thành công. Em cảm ơn anh/chị! /-heart"
                 _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 session_data["has_past_purchase"] = True
