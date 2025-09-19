@@ -98,7 +98,7 @@ def session_timeout_scanner():
         finally:
             db.close()
         
-        time.sleep(100)
+        time.sleep(300)
 
 
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
