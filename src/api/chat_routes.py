@@ -353,9 +353,10 @@ async def chat_endpoint(
                 # Tạo đơn hàng trong database
                 try:
                     # Tạo hoặc cập nhật customer profile
-                    create_or_update_customer_profile(
+                    profile = create_or_update_customer_profile(
                         db,
                         customer_id=customer_id,
+                        session_id=session_id,
                         name=collected_info.get("name"),
                         phone=collected_info.get("phone"),
                         address=collected_info.get("address")
@@ -363,12 +364,11 @@ async def chat_endpoint(
                     
                     # Tạo đơn hàng mới
                     order = create_order(
-                        db,
+                        db=db,
+                        customer_profile_id=profile.id, # Sửa lại cho đúng
                         customer_id=customer_id,
-                        customer_name=collected_info.get("name"),
-                        customer_phone=collected_info.get("phone"),
-                        customer_address=collected_info.get("address"),
-                        total_amount=0  # Sẽ được tính sau khi thêm items
+                        session_id=session_id, # Thêm session_id
+                        total_amount=0
                     )
                     
                     # Thêm các items vào đơn hàng
