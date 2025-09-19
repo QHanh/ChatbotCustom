@@ -402,7 +402,7 @@ async def chat_endpoint(
                     db.commit()
                     
                     confirmed_names = [f"{item.quantity} x {item.product_name}" for item in purchase_items]
-                    response_text = f"Dạ em đã nhận được thông tin và tạo đơn hàng cho các sản phẩm: {', '.join(confirmed_names)}. Tổng tiền: {total_amount:,.0f}đ. Em cảm ơn anh/chị! /-heart"
+                    response_text = f"Dạ, em đã nhận được thông tin và tạo đơn hàng cho các sản phẩm cho anh/chị {collected_info.get("name")} địa chỉ {collected_info.get("address")}: {', '.join(confirmed_names)}. Tổng tiền: {total_amount:,.0f}đ.\nBên em sẽ liên hệ lại với anh/chị sớm nhất.\nEm cảm ơn anh/chị! /-heart"
                     
                     print(f"✅ Đã tạo đơn hàng #{order.id} cho customer {customer_id} với {len(purchase_items)} sản phẩm")
                     
@@ -426,9 +426,12 @@ async def chat_endpoint(
                     has_purchase=True
                 )
             else:
+                store_info = get_customer_store_info(db, customer_id)
+                store_name = store_info.get("store_name", "")
+                store_address = store_info.get("store_address", "")
                 response_text = (
-                    f"Dạ vâng ạ. Vậy để đặt đơn hàng, anh/chị có thể vào đường link sản phẩm để đặt hàng hoặc đến xem trực tiếp tại cửa hàng chúng em.\n"
-                    "\nDạ anh/chị vui lòng cho em xin tên, số điện thoại và địa chỉ để em lên đơn cho anh/chị ạ. /-ok\n"
+                    f"Dạ, vâng ạ. Vậy để đặt đơn hàng, anh/chị có thể vào đường link sản phẩm để đặt hàng hoặc đến xem trực tiếp tại cửa hàng {store_name} chúng em tại {store_address}.\n"
+                    "\nAnh/chị vui lòng cho em xin tên, số điện thoại và địa chỉ để em lên đơn cho anh/chị ạ. /-ok\n"
                     "Em cảm ơn anh/chị nhiều ạ. /-heart"
                 )
                 session_data["state"] = "awaiting_customer_info"
@@ -592,7 +595,7 @@ async def chat_endpoint(
                     items=purchase_items_obj
                 )
                 
-                response_text = f"Dạ em đã nhận được đầy đủ thông tin và tạo đơn hàng thành công. Em cảm ơn anh/chị! /-heart"
+                response_text = f"Dạ, em đã nhận được đầy đủ thông tin và tạo đơn hàng thành công.\nBên em sẽ liên hệ lại với anh/chị sớm nhất.\nEm cảm ơn anh/chị! /-heart"
                 _update_session_state(db, customer_id, session_id, "active", session_data)
                 session_data["pending_purchase_item"] = None
                 session_data["has_past_purchase"] = True
@@ -629,7 +632,7 @@ async def chat_endpoint(
 
     if analysis_result.get("is_negative"):
         session_data["negativity_score"] += 1
-        if session_data["negativity_score"] >= 3:
+        if session_data["negativity_score"] >= 2:
             response_text = "Em đã báo nhân viên phụ trách, anh/chị vui lòng đợi để được hỗ trợ ngay ạ."
             _update_session_state(db, customer_id, session_id, "human_calling", session_data)
             session_data["negativity_score"] = 0
