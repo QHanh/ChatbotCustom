@@ -368,6 +368,7 @@ async def chat_endpoint(
                         customer_profile_id=profile.id, # Sửa lại cho đúng
                         customer_id=customer_id,
                         session_id=session_id, # Thêm session_id
+                        order_status="confirmed",
                         total_amount=0
                     )
                     
