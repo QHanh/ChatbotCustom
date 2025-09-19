@@ -394,7 +394,7 @@ async def chat_endpoint(
                             product_name=item_data.get("product_name", "N/A"),
                             properties=item_data.get("properties", ""),
                             quantity=quantity,
-                            price=price
+                            unit_price=price
                         )
                     
                     # Cập nhật tổng tiền đơn hàng
