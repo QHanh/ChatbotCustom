@@ -291,7 +291,7 @@ async def get_orders_summary_endpoint(customer_id: str, db: Session):
     except Exception as e:
         return {"status": "error", "message": f"Lỗi khi lấy tóm tắt đơn hàng: {str(e)}"}
 
-async def update_order_status_endpoint(customer_id: str, order_id: int, new_status: str, db: Session):
+async def update_order_status_endpoint(customer_id: str, thread_id: str, order_id: int, new_status: str, db: Session):
     """
     Cập nhật trạng thái đơn hàng.
     """
@@ -306,13 +306,14 @@ async def update_order_status_endpoint(customer_id: str, order_id: int, new_stat
         # Tìm đơn hàng
         order = db.query(Order).filter(
             Order.id == order_id,
-            Order.customer_id == customer_id
+            Order.customer_id == customer_id,
+            Order.thread_id == thread_id
         ).first()
         
         if not order:
             return {
                 "status": "error",
-                "message": f"Không tìm thấy đơn hàng #{order_id} cho customer {customer_id}"
+                "message": f"Không tìm thấy đơn hàng #{order_id} cho thread {thread_id} của customer {customer_id}"
             }
         
         old_status = order.order_status
@@ -325,6 +326,7 @@ async def update_order_status_endpoint(customer_id: str, order_id: int, new_stat
             "data": {
                 "order_id": order_id,
                 "customer_id": customer_id,
+                "thread_id": thread_id,
                 "old_status": old_status,
                 "new_status": new_status,
                 "updated_at": datetime.now().isoformat()
@@ -404,9 +406,10 @@ async def get_orders_summary(
     """
     return await get_orders_summary_endpoint(customer_id, db)
 
-@router.put("/status/{customer_id}/{order_id}", summary="Cập nhật trạng thái đơn hàng")
+@router.put("/status/{customer_id}/{thread_id}/{order_id}", summary="Cập nhật trạng thái đơn hàng")
 async def update_order_status(
     customer_id: str,
+    thread_id: str,
     order_id: int,
     new_status: str = Query(..., description="Trạng thái mới"),
     db: Session = Depends(get_db)
@@ -414,10 +417,11 @@ async def update_order_status(
     """
     Endpoint để cập nhật trạng thái đơn hàng.
     - **customer_id**: Mã khách hàng.
+    - **thread_id**: ID thread của session.
     - **order_id**: ID của đơn hàng cần cập nhật.
     - **new_status**: Trạng thái mới.
     
     Returns:
     - Thông tin về việc cập nhật trạng thái
     """
-    return await update_order_status_endpoint(customer_id, order_id, new_status, db)
+    return await update_order_status_endpoint(customer_id, thread_id, order_id, new_status, db)
