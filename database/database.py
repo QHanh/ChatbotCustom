@@ -107,7 +107,7 @@ class Order(Base):
     customer_profile_id = Column(Integer, ForeignKey('customer_profiles.id'), nullable=False)
     customer_id = Column(String, nullable=False, index=True)  # ID của cửa hàng
     session_id = Column(String, nullable=False, index=True)   # ID của session/thread
-    order_status = Column(String, nullable=False, default="pending")  # pending, confirmed, completed, cancelled
+    order_status = Column(String, nullable=False, default="Chưa gọi")  # pending, confirmed, completed, cancelled
     total_amount = Column(Float, nullable=True)               # Tổng tiền (tùy chọn)
     notes = Column(Text, nullable=True)                       # Ghi chú đơn hàng
     created_at = Column(DateTime(timezone=True), server_default=func.now())
