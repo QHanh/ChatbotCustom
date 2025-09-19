@@ -279,8 +279,6 @@ def get_sessions_for_timeout_check(db: SessionLocal):
             # Chỉ lấy sessions có state là human_calling hoặc human_chatting
             if state in ["human_calling", "human_chatting"]:
                 filtered_sessions.append(session)
-            else:
-                print(f"⚠️ Session {session.id} có status={session.status} nhưng state={state}, bỏ qua")
     
     return filtered_sessions
 
