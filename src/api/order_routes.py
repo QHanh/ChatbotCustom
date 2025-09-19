@@ -404,18 +404,18 @@ async def get_orders_summary(
     """
     return await get_orders_summary_endpoint(customer_id, db)
 
-@router.put("/{customer_id}/{order_id}/status", summary="Cập nhật trạng thái đơn hàng")
+@router.put("/status/{customer_id}/{order_id}", summary="Cập nhật trạng thái đơn hàng")
 async def update_order_status(
     customer_id: str,
     order_id: int,
-    new_status: str = Query(..., description="Trạng thái mới (pending, confirmed, completed, cancelled)"),
+    new_status: str = Query(..., description="Trạng thái mới"),
     db: Session = Depends(get_db)
 ):
     """
     Endpoint để cập nhật trạng thái đơn hàng.
     - **customer_id**: Mã khách hàng.
     - **order_id**: ID của đơn hàng cần cập nhật.
-    - **new_status**: Trạng thái mới (pending, confirmed, completed, cancelled).
+    - **new_status**: Trạng thái mới.
     
     Returns:
     - Thông tin về việc cập nhật trạng thái
