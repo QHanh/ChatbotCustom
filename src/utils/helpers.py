@@ -39,6 +39,7 @@ def is_asking_for_more(user_query: str, history_text: str, api_key: str = None) 
         - **VÍ DỤ QUAN TRỌNG:** Nếu bot đang nói về "máy hàn", và khách hỏi "em tham khảo thêm cái giá đỡ và bộ đèn", đây là một yêu cầu tìm kiếm mới, KHÔNG PHẢI `MORE_PRODUCTS`.
         - Nếu câu hỏi của khách hàng là một câu hỏi chung chung về sản phẩm mà không có ngữ cảnh liệt kê trước đó (ví dụ: "bên shop có những sản phẩm nào?").
         - Nếu câu hỏi của khách hàng là "kể hết ra" nhưng bot chưa liệt kê sản phẩm nào cả.
+        - Xin tất cả ảnh, xin ảnh nhiều loại không phải là `MORE_PRODUCTS`.
 
     3.  **Khi nào là `ASKING_INVENTORY`?**
         - Khi cuộc trò chuyện đang tập trung vào MỘT sản phẩm cụ thể và khách hàng hỏi "còn hàng không?", "còn không?".

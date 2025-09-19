@@ -64,6 +64,23 @@ def search_products(customer_id: str, product_name: str = None, category: str = 
             }
         })
 
+    # if product_name:
+    #     body["query"]["bool"]["must"].append({
+    #         "match": {
+    #             "product_name": {
+    #                 "query": product_name
+    #             }
+    #         }
+    #     })
+    #     body["query"]["bool"]["should"].append({
+    #         "match_phrase": {
+    #             "product_name": {
+    #                 "query": product_name,
+    #                 "boost": 10.0
+    #             }
+    #         }
+    #     })
+    
     if category:
         cat_field = "category.keyword" if strict_category else "category"
         if strict_category:
