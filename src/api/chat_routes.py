@@ -138,8 +138,8 @@ async def chat_endpoint(
     # Kiểm tra trạng thái bot cho customer này
     if not is_bot_active(db, customer_id):
         return ChatResponse(
-            reply="Bot hiện đang tạm dừng cho customer này.", 
-            history=[], 
+            reply="", 
+            history=[],
             human_handover_required=False
         )
     
