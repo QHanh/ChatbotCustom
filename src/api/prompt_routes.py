@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Body
 from sqlalchemy.orm import Session
 
 from dependencies import get_db
@@ -25,7 +25,7 @@ def get_prompt(
 @prompt_router.put("/prompts/{customer_id}", response_model=SystemPromptResponse, summary="Update System Prompt for a Customer")
 def update_prompt(
     customer_id: str = Path(..., description="The ID of the customer"),
-    prompt_data: SystemPromptUpdate = Depends(),
+    prompt_data: SystemPromptUpdate = Body(...),
     db: Session = Depends(get_db)
 ):
     """
