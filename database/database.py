@@ -186,8 +186,8 @@ class SystemPrompt(Base):
     prompt_name = Column(String, default='default_system_prompt', nullable=False, index=True)
     prompt_content = Column(Text, nullable=False, default=DEFAULT_SYSTEM_PROMPT_CONTENT)
     customer_id = Column(String, nullable=False, index=True) # Mỗi khách hàng sẽ có 1 prompt riêng
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class OrderItem(Base):
     __tablename__ = 'order_items'
