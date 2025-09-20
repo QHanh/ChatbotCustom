@@ -871,7 +871,7 @@ async def chat_endpoint(
                             failure_messages.append(f"{name} (các loại: {', '.join(clean_props)})")
                         else:
                             failure_messages.append(name)
-                    response_parts.append(f"Em chưa tìm thấy các sản phẩm: {'; '.join(failure_messages)}.")
+                    response_parts.append(f"Em chưa xác định được các sản phẩm anh/chị muốn mua. Anh/chị nói rõ tên sản phẩm được không ạ?")
 
                 if close_match_items:
                     suggestion_messages = []
