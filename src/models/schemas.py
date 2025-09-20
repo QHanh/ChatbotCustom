@@ -97,3 +97,13 @@ class ChatbotSettingsCreate(BaseModel):
     chatbot_message_default: Optional[str] = None
     chatbot_callout: Optional[str] = None
     chatbot_name: Optional[str] = None
+
+# Pydantic models for System Prompts
+class SystemPromptResponse(BaseModel):
+    prompt_content: str
+
+    class Config:
+        from_attributes = True
+
+class SystemPromptUpdate(BaseModel):
+    prompt_content: str = Field(..., min_length=1, description="The new content for the system prompt.")

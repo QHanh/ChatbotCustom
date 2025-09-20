@@ -1,10 +1,7 @@
 from fastapi import HTTPException, UploadFile, Path
-from typing import Dict, Any, List, Set, Optional
+from typing import Dict, Any, List, Optional
 import threading
-import io
 import requests
-from PIL import Image
-import google.generativeai as genai
 from collections import defaultdict
 
 from src.models.schemas import ChatResponse, ImageInfo, PurchaseItem, CustomerInfo, ControlBotRequest

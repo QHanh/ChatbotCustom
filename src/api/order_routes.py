@@ -5,7 +5,7 @@ Chứa các API để quản lý đơn hàng của customers
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 from dependencies import get_db
 from database.database import (

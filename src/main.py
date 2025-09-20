@@ -16,6 +16,7 @@ import logging
 logging.getLogger("watchfiles").setLevel(logging.ERROR)
 from sqlalchemy.orm import Session
 from src.api import customer_is_sale_routes
+from src.api.prompt_routes import prompt_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ app.include_router(info_store_routes.router, tags=["Info Store"])
 app.include_router(customer_is_sale_routes.router)
 app.include_router(settings_routes.router, tags=["Chatbot Settings"])
 app.include_router(order_router)
+app.include_router(prompt_router, tags=["System Prompts"])
 
 @app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(

@@ -54,7 +54,7 @@ def generate_llm_response(
     if db and customer_id:
         store_info_dict = get_customer_store_info(db, customer_id)
 
-    prompt = _build_prompt(user_query, context, needs_product_search, wants_images, product_infos, has_history, is_image_search, store_info_dict)
+    prompt = _build_prompt(user_query, context, needs_product_search, wants_images, product_infos, has_history, is_image_search, store_info_dict, db, customer_id)
 
     print("--- PROMPT GỬI ĐẾN LLM ---")
     print(prompt)
@@ -153,7 +153,7 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
     return product_context
 
 
-def _build_prompt(user_query: str, context: str, needs_product_search: bool, wants_images: bool = False, product_infos: list = None, has_history: bool = None, is_image_search: bool = False, store_info_dict: dict = None) -> str:
+def _build_prompt(user_query: str, context: str, needs_product_search: bool, wants_images: bool = False, product_infos: list = None, has_history: bool = None, is_image_search: bool = False, store_info_dict: dict = None, db: Session = None, customer_id: str = None) -> str:
     """
     Xây dựng prompt cho LLM với các quy tắc hội thoại nâng cao.
     """
@@ -214,6 +214,11 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 - **TUYỆT ĐỐI BỎ QUA** lịch sử trò chuyện cũ và không được liệt kê các sản phẩm khác không có trong dữ liệu tìm thấy.
 """
 
+    from database.database import get_or_create_system_prompt
+
+    # Lấy hoặc tự động tạo system prompt cho customer
+    system_prompt_content = get_or_create_system_prompt(db, customer_id)
+
     if not needs_product_search:
         return f"""## BỐI CẢNH ##
 - Bạn là một nhân viên tư vấn chuyên nghiệp của cửa hàng.
@@ -267,54 +272,7 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 
 2.  {greeting_rule}
 
-3.  **Lọc và giữ vững chủ đề (QUAN TRỌNG NHẤT):**
-    - Dựa vào lịch sử hội thoại, Phải xác định **chủ đề chính** của cuộc trò chuyện (ví dụ: "máy hàn", "kính hiển vi RELIFE").
-    - **TUYỆT ĐỐI KHÔNG** giới thiệu sản phẩm không thuộc chủ đề chính.
-    - Nếu khách hỏi một sản phẩm không có trong dữ liệu cung cấp, hãy trả lời rằng: "Dạ, bên em không bán 'tên_sản_phẩm_khách_hỏi' ạ."
-
-4.  **Sản phẩm có nhiều model, combo, cỡ, màu sắc,... (tùy thuộc tính):**
-    - Khi giới thiệu lần đầu, chỉ nói tên sản phẩm chính và hãy thông báo có nhiều màu hoặc có nhiều model hoặc có nhiều cỡ,... (tùy vào thuộc tính của sản phẩm).
-    - **Khi khách hỏi trực tiếp về số lượng** (ví dụ: "chỉ có 3 màu thôi à?"), bạn phải trả lời thẳng vào câu hỏi.
-
-5.  **Xử lý câu hỏi chung về danh mục:**
-    - Nếu khách hỏi "shop có bán máy hàn không?, có kính hiển vi không?", **KHÔNG liệt kê sản phẩm ra ngay**. Hãy xác nhận là có bán và có thể nói ra một số đặc điểm riêng biệt như thương hiệu, hãng có trong dữ liệu cung cấp và hỏi lại để làm rõ nhu cầu lựa chọn.
-
-6.  **Liệt kê sản phẩm:**
-    - Khi khách hàng yêu cầu liệt kê các sản phẩm (ví dụ: "có những loại nào", "kể hết ra đi"), bạn **PHẢI** trình bày câu trả lời dưới dạng một danh sách rõ ràng.
-    - **Mỗi sản phẩm phải nằm trên một dòng riêng**, bắt đầu bằng dấu gạch ngang (-).
-    - **KHÔNG** được gộp tất cả các tên sản phẩm vào trong một đoạn văn.
-    - Hãy liệt kê sản phẩm mà theo bạn có độ liên quan cao nhất đến câu hỏi của khách hàng trước.
-
-7.  **Xem thêm / Loại khác:**
-    - Áp dụng khi khách hỏi "còn không?", "còn loại nào nữa không?" hoặc có thể là "tiếp đi" (tùy vào ngữ cảnh cuộc trò chuyện). Hiểu rằng khách muốn xem thêm sản phẩm khác (cùng chủ đề), **không phải hỏi tồn kho**.
-
-8.  **Tồn kho:**
-    - **KHÔNG** liệt kê các sản phẩm hoặc các phiên bản sản phẩm có "Tình trạng: Hết hàng".
-    - **KHÔNG** tự động nói ra số lượng tồn kho chính xác hay tình trạng "Còn hàng". Chỉ nói khi khách hỏi.
-    
-9.  **Giá sản phẩm:**
-    - **Các sản phẩm có giá là **Liên hệ** thì **KHÔNG ĐƯỢC** nói ra giá, chỉ nói tên sản phẩm KHÔNG KÈM GIÁ.
-    - **Các sản phẩm có giá **KHÁC** **Liên hệ** thì hãy luôn nói kèm giá khi liệt kê.
-    - **CHỈ KHI** khách hàng hỏi giá của sản phẩm có giá "Liên hệ" thì hãy nói "Sản phẩm này em chưa có giá chính xác, nếu anh/chị muốn mua thì em sẽ xem lại và báo lại cho anh chị một mức giá hợp lý".
-
-10.  **Xưng hô và Định dạng:**
-    - Luôn xưng "em", gọi khách là "anh/chị".
-    - **KHÔNG NÊN** lạm dụng quá nhiều "anh/chị nhé", hãy thỉnh thoảng mới sử dụng để cho tự nhiên hơn.
-    - KHÔNG dùng Markdown. Chỉ dùng text thuần.
-
-11.  **Link sản phẩm**
-    - Hãy gửi kèm link sản phẩm vào cuối tên sản phẩm **không cần thêm gì hết** khi liệt kê các sản phẩm. Không cần thêm chữ: "Link sản phẩm:" vào.
-    - Chỉ gửi kèm link các sản phẩm với các câu hỏi mà khách hàng yêu cầu liệt kê rõ về sản phẩm đó. **KHÔNG** gửi kèm với các câu hỏi chung chung ví dụ: "Có những loại máy hàn nào?".
-
-12.  **Với các câu hỏi bao quát khi khách hàng mới hỏi**
-    - Ví dụ: "Shop bạn bán những mặt hàng gì", "Bên bạn có những sản phẩm gi?", hãy trả lời rằng: "Dạ, bên em chuyên kinh doanh các dụng cụ sửa chữa, thiết bị điện tử như máy hàn, kính hiển vi,... Anh/chị đang quan tâm mặt hàng nào để em tư vấn ạ."
-
-13.  **Xử lý lời đồng ý:**
-    - Nếu bot ở lượt trước vừa hỏi một câu hỏi Yes/No để đề nghị cung cấp thông tin (ví dụ: "Anh/chị có muốn xem chi tiết không?") và câu hỏi mới nhất của khách là một lời đồng ý (ví dụ: "có", "vâng", "ok"), HÃY thực hiện hành động đã đề nghị.
-    - Trong trường hợp này, hãy liệt kê các sản phẩm có trong "DỮ LIỆU CUNG CẤP" theo đúng định dạng danh sách.
-
-14. **Xử lý thông tin không có sẵn:**
-    - Nếu khách hàng hỏi về một thông tin không được cung cấp trong "BỐI CẢNH" hoặc "DỮ LIỆU CUNG CẤP" (ví dụ: phí ship, chứng từ, chiết khấu,...), thì **TUYỆT ĐỐI KHÔNG ĐƯỢC BỊA RA**. Hãy trả lời một cách lịch sự rằng: "Dạ, về thông tin này em chưa rõ ạ, em sẽ liên hệ lại cho nhân viên tư vấn để thông tin cho mình sau nhé."
+{system_prompt_content}
 
 ## CÂU TRẢ LỜI CỦA BẠN: ##
 """
