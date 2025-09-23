@@ -1,7 +1,7 @@
 import os
 from elasticsearch import Elasticsearch
 from src.config.settings import PAGE_SIZE
-from typing import List, Dict
+from typing import List, Dict, Any
 from src.utils.helpers import sanitize_for_es
 
 ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "http://localhost:9200")
