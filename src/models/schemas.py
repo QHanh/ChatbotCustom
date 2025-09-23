@@ -29,8 +29,8 @@ class Action(BaseModel):
     url: str
 
 class ChatResponse(BaseModel):
-    reply: str
-    history: List[Dict[str, str]]
+    reply: str = ""  # Đặt default value để tránh lỗi validation
+    history: List[Dict[str, str]] = []  # Đặt default value
     images: List[ImageInfo] = []
     has_images: bool = False
     has_purchase: bool = False
@@ -38,6 +38,11 @@ class ChatResponse(BaseModel):
     human_handover_required: Optional[bool] = False
     has_negativity: Optional[bool] = False
     action_data: Optional[Action] = None
+    
+    class Config:
+        # Cho phép validate và convert các kiểu dữ liệu
+        str_strip_whitespace = True
+        validate_assignment = True
 
 class QueryExtraction(BaseModel):
     product_name: str
