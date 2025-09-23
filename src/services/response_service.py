@@ -1,13 +1,14 @@
 import json
 import re
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, Any
 from src.services.llm_service import get_gemini_model, get_lmstudio_response, get_openai_model
+from src.services.search_service import search_faqs
 from src.utils.helpers import is_general_query, format_history_text
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
 
-def generate_llm_response(
+async def generate_llm_response(
     user_query: str,
     search_results: list,
     history: list = None,
@@ -19,11 +20,25 @@ def generate_llm_response(
     db: Session = None,
     customer_id: str = None,
     api_key: str = None,
-    is_sale: bool = False
+    is_sale: bool = False,
 ) -> str:
     """
     Tạo prompt và gọi đến LLM để sinh câu trả lời.
     """
+    # Tìm kiếm FAQ trước
+    faq_context = ""
+    if customer_id:
+        faq_results = await search_faqs(customer_id=customer_id, query=user_query)
+        
+        if faq_results:
+            found_faq = faq_results[0]
+            faq_context = f"""--- GỢI Ý TỪ FAQ ---
+Câu hỏi tương tự đã tìm thấy: "{found_faq['question']}"
+Câu trả lời có sẵn (chỉ trả lời theo câu này nếu bạn thấy phù hợp): "{found_faq['answer']}"
+--- HẾT GỢI Ý ---
+
+"""
+    
     if is_general_query(user_query):
         if not search_results:
             return {"answer": "Dạ, cửa hàng em chưa có sản phẩm nào để giới thiệu ạ.", "product_images": []} if wants_images else "Dạ, cửa hàng em chưa có sản phẩm nào để giới thiệu ạ."
@@ -37,6 +52,11 @@ def generate_llm_response(
 
     context = ""
     has_history = bool(history)
+    
+    # Thêm FAQ context vào đầu nếu có
+    if faq_context:
+        context += faq_context
+    
     if has_history:
         context += f"Lịch sử hội thoại gần đây:\n{format_history_text(history)}\n"
     else:
@@ -54,7 +74,7 @@ def generate_llm_response(
     if db and customer_id:
         store_info_dict = get_customer_store_info(db, customer_id)
 
-    prompt = _build_prompt(user_query, context, needs_product_search, wants_images, product_infos, has_history, is_image_search, store_info_dict, db, customer_id)
+    prompt = _build_prompt(user_query, context, needs_product_search, wants_images, product_infos, has_history, is_image_search, store_info_dict, db, customer_id, bool(faq_context))
 
     print("--- PROMPT GỬI ĐẾN LLM ---")
     print(prompt)
@@ -153,7 +173,7 @@ def _build_product_context(search_results: List[Dict], include_specs: bool = Fal
     return product_context
 
 
-def _build_prompt(user_query: str, context: str, needs_product_search: bool, wants_images: bool = False, product_infos: list = None, has_history: bool = None, is_image_search: bool = False, store_info_dict: dict = None, db: Session = None, customer_id: str = None) -> str:
+def _build_prompt(user_query: str, context: str, needs_product_search: bool, wants_images: bool = False, product_infos: list = None, has_history: bool = None, is_image_search: bool = False, store_info_dict: dict = None, db: Session = None, customer_id: str = None, has_faq_context: bool = False) -> str:
     """
     Xây dựng prompt cho LLM với các quy tắc hội thoại nâng cao.
     """
@@ -205,6 +225,17 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
         else:
             greeting_rule = '- **Chào hỏi:** KHÔNG chào hỏi đầy đủ. Bắt đầu câu trả lời trực tiếp bằng "Dạ,".'
 
+    # FAQ priority rules
+    faq_priority_rule = ""
+    if has_faq_context:
+        faq_priority_rule = """
+**Quy trình ưu tiên FAQ:**
+- Hệ thống đã tìm kiếm trước trong kho Câu hỏi thường gặp (FAQ) và có thể đã cung cấp một cặp câu hỏi-trả lời có sẵn trong context.
+- **Ưu tiên tuyệt đối:** Hãy xem xét kỹ thông tin này trước tiên.
+- Nếu câu trả lời được gợi ý thực sự phù hợp với câu hỏi của người dùng và ngữ cảnh cuộc trò chuyện, hãy sử dụng nó làm cơ sở để trả lời. Bạn có thể diễn đạt lại cho tự nhiên hơn.
+- Nếu câu trả lời không phù hợp, hãy bỏ qua nó và sử dụng các công cụ khác để tìm thông tin.
+"""
+
     image_search_priority_rule = ""
     if is_image_search:
         image_search_priority_rule = """
@@ -228,6 +259,7 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 
 ## NHIỆM VỤ (RẤT QUAN TRỌNG) ##
 - Trả lời câu hỏi của sau khách hàng: "{user_query}"
+
 - **BẠN PHẢI TRẢ LỜI DỰA TRÊN NGỮ CẢNH CỦA LỊCH SỬ HỘI THOẠI.**
 - **TUYỆT ĐỐI KHÔNG ĐƯỢC THAY ĐỔI CHỦ ĐỀ.** Ví dụ: nếu cuộc trò chuyện đang về "sản phẩm A", câu trả lời của bạn cũng phải về "sản phẩm A", không được tự ý chuyển sang "sản phẩm B".
 - Hãy trả lời một cách thân thiện và lễ phép.
@@ -237,9 +269,11 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 
 1.  {greeting_rule}
 
-2. Nếu khách hàng hỏi những từ hoặc câu bạn không hiểu hãy nói: "Dạ em chưa hiểu ý của anh/chị ạ."
+2.  {faq_priority_rule}
 
-3. Thông tin nào về cửa hàng chưa được cung cấp thì **TUYỆT ĐỐI KHÔNG** được trả lời theo ý bạn. Hãy nói rằng: "Dạ, em chưa có thông tin về 'tên_thông_tin_khách_hỏi' ạ."
+3. Nếu khách hàng hỏi những từ hoặc câu bạn không hiểu hãy nói: "Dạ em chưa hiểu ý của anh/chị ạ."
+
+4. Thông tin nào về cửa hàng chưa được cung cấp thì **TUYỆT ĐỐI KHÔNG** được trả lời theo ý bạn. Hãy nói rằng: "Dạ, em chưa có thông tin về 'tên_thông_tin_khách_hỏi' ạ."
 
 ## DỮ LIỆU CUNG CẤP ##
 {context}
@@ -270,7 +304,9 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 
 1.  {image_search_priority_rule}
 
-2.  {greeting_rule}
+2.  {faq_priority_rule}
+
+3.  {greeting_rule}
 
 {system_prompt_content}
 

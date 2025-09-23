@@ -6,6 +6,7 @@ from src.utils.helpers import sanitize_for_es
 
 ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "http://localhost:9200")
 INDEX_NAME = "products_customer"
+FAQ_INDEX = "faqs"
 
 try:
     es_client = Elasticsearch(hosts=[ELASTIC_HOST])
@@ -153,4 +154,35 @@ def search_products_by_image(customer_id: str, image_embedding: list, top_k: int
         return hits
     except Exception as e:
         print(f"Lỗi khi tìm kiếm bằng vector cho customer '{customer_id}': {e}")
+        return []
+
+async def search_faqs(
+    customer_id: str,
+    query: str,
+) -> List[Dict[str, Any]]:
+    """
+    Tìm kiếm câu hỏi tương tự trong index FAQ.
+    """
+    if not es_client:
+        return []
+
+    sanitized_customer_id = sanitize_for_es(customer_id)
+
+    try:
+        response = await es_client.search(
+            index=FAQ_INDEX,
+            query={
+                "bool": {
+                    "must": [
+                        {"term": {"customer_id": sanitized_customer_id}},
+                        {"match": {"question": query}}
+                    ]
+                }
+            },
+            routing=sanitized_customer_id,
+            size=1
+        )
+        return [hit['_source'] for hit in response['hits']['hits']]
+    except Exception as e:
+        print(f"Lỗi khi tìm kiếm FAQ: {e}")
         return []
