@@ -28,7 +28,7 @@ def generate_llm_response(
     # Tìm kiếm FAQ trước
     faq_context = ""
     if customer_id:
-        faq_results = await search_faqs(customer_id=customer_id, query=user_query)
+        faq_results = search_faqs(customer_id=customer_id, query=user_query)
         
         if faq_results:
             found_faq = faq_results[0]

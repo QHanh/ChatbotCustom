@@ -156,7 +156,7 @@ def search_products_by_image(customer_id: str, image_embedding: list, top_k: int
         print(f"Lỗi khi tìm kiếm bằng vector cho customer '{customer_id}': {e}")
         return []
 
-async def search_faqs(
+def search_faqs(
     customer_id: str,
     query: str,
 ) -> List[Dict[str, Any]]:
@@ -169,7 +169,7 @@ async def search_faqs(
     sanitized_customer_id = sanitize_for_es(customer_id)
 
     try:
-        response = await es_client.search(
+        response = es_client.search(
             index=FAQ_INDEX,
             query={
                 "bool": {
