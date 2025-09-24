@@ -128,41 +128,41 @@ async def chat_endpoint(
     image_url: Optional[str] = None,
     image: Optional[UploadFile] = None
 ) -> ChatResponse:
-    # Validate và sanitize input parameters
-    import inspect
+    # # Validate và sanitize input parameters
+    # import inspect
     
-    # Ensure all string parameters are properly converted from coroutines if needed
-    for param_name, param_value in [('customer_id', customer_id), ('session_id', session_id), 
-                                   ('message', message), ('model_choice', model_choice), 
-                                   ('api_key', api_key), ('image_url', image_url)]:
-        if param_value is not None:
-            if inspect.iscoroutine(param_value):
-                print(f"WARNING: Received coroutine object as {param_name} in chat_endpoint. Converting to string.")
-                if param_name == 'customer_id':
-                    customer_id = str(param_value)
-                elif param_name == 'session_id':
-                    session_id = str(param_value)
-                elif param_name == 'message':
-                    message = str(param_value)
-                elif param_name == 'model_choice':
-                    model_choice = str(param_value)
-                elif param_name == 'api_key':
-                    api_key = str(param_value)
-                elif param_name == 'image_url':
-                    image_url = str(param_value)
-            elif not isinstance(param_value, str):
-                if param_name == 'customer_id':
-                    customer_id = str(param_value)
-                elif param_name == 'session_id':
-                    session_id = str(param_value)
-                elif param_name == 'message':
-                    message = str(param_value)
-                elif param_name == 'model_choice':
-                    model_choice = str(param_value)
-                elif param_name == 'api_key':
-                    api_key = str(param_value)
-                elif param_name == 'image_url':
-                    image_url = str(param_value) if param_value else None
+    # # Ensure all string parameters are properly converted from coroutines if needed
+    # for param_name, param_value in [('customer_id', customer_id), ('session_id', session_id), 
+    #                                ('message', message), ('model_choice', model_choice), 
+    #                                ('api_key', api_key), ('image_url', image_url)]:
+    #     if param_value is not None:
+    #         if inspect.iscoroutine(param_value):
+    #             print(f"WARNING: Received coroutine object as {param_name} in chat_endpoint. Converting to string.")
+    #             if param_name == 'customer_id':
+    #                 customer_id = str(param_value)
+    #             elif param_name == 'session_id':
+    #                 session_id = str(param_value)
+    #             elif param_name == 'message':
+    #                 message = str(param_value)
+    #             elif param_name == 'model_choice':
+    #                 model_choice = str(param_value)
+    #             elif param_name == 'api_key':
+    #                 api_key = str(param_value)
+    #             elif param_name == 'image_url':
+    #                 image_url = str(param_value)
+    #         elif not isinstance(param_value, str):
+    #             if param_name == 'customer_id':
+    #                 customer_id = str(param_value)
+    #             elif param_name == 'session_id':
+    #                 session_id = str(param_value)
+    #             elif param_name == 'message':
+    #                 message = str(param_value)
+    #             elif param_name == 'model_choice':
+    #                 model_choice = str(param_value)
+    #             elif param_name == 'api_key':
+    #                 api_key = str(param_value)
+    #             elif param_name == 'image_url':
+    #                 image_url = str(param_value) if param_value else None
     
     with bot_state_lock:
         if not bot_running:

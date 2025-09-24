@@ -304,14 +304,14 @@ def create_or_update_customer_is_sale(db: SessionLocal, customer_id: str, thread
 def add_chat_message(db: SessionLocal, customer_id: str, thread_id: str, role: str, message: str, thread_name: str = None):
     """Thêm một tin nhắn vào lịch sử chat"""
     # Check if message is a coroutine object and handle it
-    import inspect
-    if inspect.iscoroutine(message):
-        print(f"WARNING: Received coroutine object as message in add_chat_message. Converting to string.")
-        message = str(message)
+    # import inspect
+    # if inspect.iscoroutine(message):
+    #     print(f"WARNING: Received coroutine object as message in add_chat_message. Converting to string.")
+    #     message = str(message)
     
-    # Ensure message is a string
-    if not isinstance(message, str):
-        message = str(message) if message is not None else ""
+    # # Ensure message is a string
+    # if not isinstance(message, str):
+    #     message = str(message) if message is not None else ""
     
     if not message or not message.strip():
         return
@@ -410,34 +410,34 @@ def create_or_update_customer_profile(db: SessionLocal, customer_id: str, sessio
                                     name: str = None, phone: str = None, address: str = None, 
                                     email: str = None, notes: str = None):
     """Tạo mới hoặc cập nhật profile khách hàng"""
-    import inspect
+    # import inspect
     
-    # Ensure all string parameters are properly converted from coroutines if needed
-    for param_name, param_value in [('name', name), ('phone', phone), ('address', address), ('email', email), ('notes', notes)]:
-        if param_value is not None:
-            if inspect.iscoroutine(param_value):
-                print(f"WARNING: Received coroutine object as {param_name} in create_or_update_customer_profile. Converting to string.")
-                if param_name == 'name':
-                    name = str(param_value)
-                elif param_name == 'phone':
-                    phone = str(param_value)
-                elif param_name == 'address':
-                    address = str(param_value)
-                elif param_name == 'email':
-                    email = str(param_value)
-                elif param_name == 'notes':
-                    notes = str(param_value)
-            elif not isinstance(param_value, str):
-                if param_name == 'name':
-                    name = str(param_value)
-                elif param_name == 'phone':
-                    phone = str(param_value)
-                elif param_name == 'address':
-                    address = str(param_value)
-                elif param_name == 'email':
-                    email = str(param_value)
-                elif param_name == 'notes':
-                    notes = str(param_value)
+    # # Ensure all string parameters are properly converted from coroutines if needed
+    # for param_name, param_value in [('name', name), ('phone', phone), ('address', address), ('email', email), ('notes', notes)]:
+    #     if param_value is not None:
+    #         if inspect.iscoroutine(param_value):
+    #             print(f"WARNING: Received coroutine object as {param_name} in create_or_update_customer_profile. Converting to string.")
+    #             if param_name == 'name':
+    #                 name = str(param_value)
+    #             elif param_name == 'phone':
+    #                 phone = str(param_value)
+    #             elif param_name == 'address':
+    #                 address = str(param_value)
+    #             elif param_name == 'email':
+    #                 email = str(param_value)
+    #             elif param_name == 'notes':
+    #                 notes = str(param_value)
+    #         elif not isinstance(param_value, str):
+    #             if param_name == 'name':
+    #                 name = str(param_value)
+    #             elif param_name == 'phone':
+    #                 phone = str(param_value)
+    #             elif param_name == 'address':
+    #                 address = str(param_value)
+    #             elif param_name == 'email':
+    #                 email = str(param_value)
+    #             elif param_name == 'notes':
+    #                 notes = str(param_value)
     
     # Tìm profile hiện có theo session_id trước
     profile = get_customer_profile(db, customer_id, session_id)

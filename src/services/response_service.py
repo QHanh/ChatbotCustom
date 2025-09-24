@@ -8,7 +8,7 @@ from src.utils.helpers import is_general_query, format_history_text
 from src.utils.get_customer_info import get_customer_store_info
 from sqlalchemy.orm import Session
 
-async def generate_llm_response(
+def generate_llm_response(
     user_query: str,
     search_results: list,
     history: list = None,
