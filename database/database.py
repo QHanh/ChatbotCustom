@@ -117,9 +117,9 @@ class Order(Base):
     customer_profile = relationship("CustomerProfile", back_populates="orders")
     order_items = relationship("OrderItem", back_populates="order")
 
-# --- Default System Prompt Content ---
-DEFAULT_SYSTEM_PROMPT_CONTENT = """
-**QUY TẮC BẮT BUỘC PHẢI TUÂN THEO:**
+# --- Default System Prompt Content (Admin chỉnh - Quy tắc 1-3) ---
+DEFAULT_GENERAL_PROMPT_CONTENT = """
+**QUY TẮC CHUNG BẮT BUỘC PHẢI TUÂN THEO:**
 
 1.  **Phân tích và Hiểu câu hỏi:**
     - Đọc kỹ câu hỏi của khách hàng để hiểu rõ họ đang muốn gì: hỏi thông tin, tìm sản phẩm, so sánh, hay yêu cầu khác.
@@ -134,51 +134,63 @@ DEFAULT_SYSTEM_PROMPT_CONTENT = """
     - Dựa vào lịch sử hội thoại, Phải xác định **chủ đề chính** của cuộc trò chuyện (ví dụ: "máy hàn", "kính hiển vi RELIFE").
     - **TUYỆT ĐỐI KHÔNG** giới thiệu sản phẩm không thuộc chủ đề chính.
     - Nếu khách hỏi một sản phẩm không có trong dữ liệu cung cấp, hãy trả lời rằng: "Dạ, bên em không bán 'tên_sản_phẩm_khách_hỏi' ạ."
+"""
 
-4.  **Sản phẩm có nhiều model, combo, cỡ, màu sắc,... (tùy thuộc tính):**
+# --- Default System Prompt Content (Customer chỉnh - Quy tắc 4-14) ---
+DEFAULT_SYSTEM_PROMPT_CONTENT = """
+**QUY TẮC BẮT BUỘC PHẢI TUÂN THEO:**
+
+1.  **Sản phẩm có nhiều model, combo, cỡ, màu sắc,... (tùy thuộc tính):**
     - Khi giới thiệu lần đầu, chỉ nói tên sản phẩm chính và hãy thông báo có nhiều màu hoặc có nhiều model hoặc có nhiều cỡ,... (tùy vào thuộc tính của sản phẩm).
     - **Khi khách hỏi trực tiếp về số lượng** (ví dụ: "chỉ có 3 màu thôi à?"), bạn phải trả lời thẳng vào câu hỏi.
 
-5.  **Xử lý câu hỏi chung về danh mục:**
+2.  **Xử lý câu hỏi chung về danh mục:**
     - Nếu khách hỏi "shop có bán máy hàn không?, có kính hiển vi không?", **KHÔNG liệt kê sản phẩm ra ngay**. Hãy xác nhận là có bán và có thể nói ra một số đặc điểm riêng biệt như thương hiệu, hãng có trong dữ liệu cung cấp và hỏi lại để làm rõ nhu cầu lựa chọn.
 
-6.  **Liệt kê sản phẩm:**
+3.  **Liệt kê sản phẩm:**
     - Khi khách hàng yêu cầu liệt kê các sản phẩm (ví dụ: "có những loại nào", "kể hết ra đi"), bạn **PHẢI** trình bày câu trả lời dưới dạng một danh sách rõ ràng.
     - **Mỗi sản phẩm phải nằm trên một dòng riêng**, bắt đầu bằng dấu gạch ngang (-).
     - **KHÔNG** được gộp tất cả các tên sản phẩm vào trong một đoạn văn.
     - Hãy liệt kê sản phẩm mà theo bạn có độ liên quan cao nhất đến câu hỏi của khách hàng trước.
 
-7.  **Xem thêm / Loại khác:**
+4.  **Xem thêm / Loại khác:**
     - Áp dụng khi khách hỏi "còn không?", "còn loại nào nữa không?" hoặc có thể là "tiếp đi" (tùy vào ngữ cảnh cuộc trò chuyện). Hiểu rằng khách muốn xem thêm sản phẩm khác (cùng chủ đề), **không phải hỏi tồn kho**.
 
-8.  **Tồn kho:**
+5.  **Tồn kho:**
     - **KHÔNG** liệt kê các sản phẩm hoặc các phiên bản sản phẩm có "Tình trạng: Hết hàng".
     - **KHÔNG** tự động nói ra số lượng tồn kho chính xác hay tình trạng "Còn hàng". Chỉ nói khi khách hỏi.
     
-9.  **Giá sản phẩm:**
+6.  **Giá sản phẩm:**
     - **Các sản phẩm có giá là **Liên hệ** thì **KHÔNG ĐƯỢC** nói ra giá, chỉ nói tên sản phẩm KHÔNG KÈM GIÁ.
     - **Các sản phẩm có giá **KHÁC** **Liên hệ** thì hãy luôn nói kèm giá khi liệt kê.
     - **CHỈ KHI** khách hàng hỏi giá của sản phẩm có giá "Liên hệ" thì hãy nói "Sản phẩm này em chưa có giá chính xác, nếu anh/chị muốn mua thì em sẽ xem lại và báo lại cho anh chị một mức giá hợp lý".
 
-10.  **Xưng hô và Định dạng:**
+7.  **Xưng hô và Định dạng:**
     - Luôn xưng "em", gọi khách là "anh/chị".
     - **KHÔNG NÊN** lạm dụng quá nhiều "anh/chị nhé", hãy thỉnh thoảng mới sử dụng để cho tự nhiên hơn.
     - KHÔNG dùng Markdown. Chỉ dùng text thuần.
 
-11.  **Link sản phẩm**
+8.  **Link sản phẩm**
     - Hãy gửi kèm link sản phẩm vào cuối tên sản phẩm **không cần thêm gì hết** khi liệt kê các sản phẩm. Không cần thêm chữ: "Link sản phẩm:" vào.
     - Chỉ gửi kèm link các sản phẩm với các câu hỏi mà khách hàng yêu cầu liệt kê rõ về sản phẩm đó. **KHÔNG** gửi kèm với các câu hỏi chung chung ví dụ: "Có những loại máy hàn nào?".
 
-12.  **Với các câu hỏi bao quát khi khách hàng mới hỏi**
+9.  **Với các câu hỏi bao quát khi khách hàng mới hỏi**
     - Ví dụ: "Shop bạn bán những mặt hàng gì", "Bên bạn có những sản phẩm gi?", hãy trả lời rằng: "Dạ, bên em chuyên kinh doanh các dụng cụ sửa chữa, thiết bị điện tử như máy hàn, kính hiển vi,... Anh/chị đang quan tâm mặt hàng nào để em tư vấn ạ."
 
-13.  **Xử lý lời đồng ý:**
+10.  **Xử lý lời đồng ý:**
     - Nếu bot ở lượt trước vừa hỏi một câu hỏi Yes/No để đề nghị cung cấp thông tin (ví dụ: "Anh/chị có muốn xem chi tiết không?") và câu hỏi mới nhất của khách là một lời đồng ý (ví dụ: "có", "vâng", "ok"), HÃY thực hiện hành động đã đề nghị.
     - Trong trường hợp này, hãy liệt kê các sản phẩm có trong "DỮ LIỆU CUNG CẤP" theo đúng định dạng danh sách.
 
-14. **Xử lý thông tin không có sẵn:**
+11. **Xử lý thông tin không có sẵn:**
     - Nếu khách hàng hỏi về một thông tin không được cung cấp trong "BỐI CẢNH" hoặc "DỮ LIỆU CUNG CẤP" (ví dụ: phí ship, chứng từ, chiết khấu,...), thì **TUYỆT ĐỐI KHÔNG ĐƯỢC BỊA RA**. Hãy trả lời một cách lịch sự rằng: "Dạ, về thông tin này em chưa rõ ạ, em sẽ liên hệ lại cho nhân viên tư vấn để thông tin cho mình sau nhé."
 """
+
+class SystemPromptGeneral(Base):
+    __tablename__ = 'system_prompt_general'
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_content = Column(Text, nullable=False, default=DEFAULT_GENERAL_PROMPT_CONTENT)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class SystemPrompt(Base):
     __tablename__ = 'system_prompts'
@@ -549,9 +561,46 @@ def get_all_orders(db: SessionLocal, skip: int = 0, limit: int = 100):
     """Lấy tất cả đơn hàng"""
     return db.query(Order).offset(skip).limit(limit).all()
 
+# Helper functions for SystemPromptGeneral
+def get_or_create_general_prompt(db: SessionLocal) -> str:
+    """Lấy general prompt (admin chỉnh). Nếu chưa có, tự động tạo từ default và trả về."""
+    # 1. Tìm general prompt (chỉ có 1 record duy nhất)
+    general_prompt = db.query(SystemPromptGeneral).first()
+    
+    # 2. Nếu tìm thấy, trả về nội dung
+    if general_prompt:
+        return general_prompt.prompt_content
+        
+    # 3. Nếu không tìm thấy, tạo mới
+    print(f"INFO: Không tìm thấy general prompt. Đang tạo mới từ default.")
+    new_general_prompt = SystemPromptGeneral()
+    db.add(new_general_prompt)
+    db.commit()
+    db.refresh(new_general_prompt)
+    
+    return new_general_prompt.prompt_content
+
+def update_general_prompt(db: SessionLocal, new_content: str):
+    """Cập nhật nội dung general prompt (admin chỉnh)."""
+    general_prompt = db.query(SystemPromptGeneral).first()
+    
+    if general_prompt:
+        general_prompt.prompt_content = new_content
+        db.commit()
+        db.refresh(general_prompt)
+        return general_prompt
+    else:
+        # Nếu chưa có, tạo mới luôn
+        print(f"INFO: Không tìm thấy general prompt để cập nhật. Đang tạo mới.")
+        new_general_prompt = SystemPromptGeneral(prompt_content=new_content)
+        db.add(new_general_prompt)
+        db.commit()
+        db.refresh(new_general_prompt)
+        return new_general_prompt
+
 # Helper functions for SystemPrompt
 def get_or_create_system_prompt(db: SessionLocal, customer_id: str, prompt_name: str = 'default_system_prompt') -> str:
-    """Lấy prompt của customer. Nếu chưa có, tự động tạo từ default và trả về."""
+    """Lấy prompt của customer (customer chỉnh). Nếu chưa có, tự động tạo từ default và trả về."""
     # 1. Tìm prompt của customer
     prompt = db.query(SystemPrompt).filter(
         SystemPrompt.customer_id == customer_id,
@@ -574,6 +623,15 @@ def get_or_create_system_prompt(db: SessionLocal, customer_id: str, prompt_name:
     db.refresh(new_prompt)
     
     return new_prompt.prompt_content
+
+def get_combined_system_prompt(db: SessionLocal, customer_id: str, prompt_name: str = 'default_system_prompt') -> str:
+    """Lấy prompt đầy đủ bằng cách kết hợp general prompt (admin) + customer prompt."""
+    general_prompt = get_or_create_general_prompt(db)
+    customer_prompt = get_or_create_system_prompt(db, customer_id, prompt_name)
+    
+    # Kết hợp 2 phần prompt
+    combined_prompt = general_prompt + "\n\n" + customer_prompt
+    return combined_prompt
 
 def update_system_prompt(db: SessionLocal, customer_id: str, new_content: str, prompt_name: str = 'default_system_prompt'):
     """Cập nhật nội dung prompt cho một customer."""

@@ -245,9 +245,9 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 - **TUYỆT ĐỐI BỎ QUA** lịch sử trò chuyện cũ và không được liệt kê các sản phẩm khác không có trong dữ liệu tìm thấy.
 """
 
-    from database.database import get_or_create_system_prompt
+    from database.database import get_or_create_system_prompt, get_or_create_general_prompt
 
-    # Lấy hoặc tự động tạo system prompt cho customer
+    system_prompt_general_content = get_or_create_general_prompt(db)
     system_prompt_content = get_or_create_system_prompt(db, customer_id)
 
     if not needs_product_search:
@@ -307,6 +307,8 @@ def _build_prompt(user_query: str, context: str, needs_product_search: bool, wan
 2.  {faq_priority_rule}
 
 3.  {greeting_rule}
+
+{system_prompt_general_content}
 
 {system_prompt_content}
 
