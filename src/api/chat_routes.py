@@ -260,77 +260,65 @@ async def chat_endpoint(
         final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
         return ChatResponse(reply=response_text, history=final_history, human_handover_required=False)
  
-    API_ENDPOINT = "https://embed.doiquanai.vn/embed"
     if image_url or image:
-        print(f"Phát hiện hình ảnh, bắt đầu xử lý...")
-        embedding_vector = None
+        print("Phát hiện hình ảnh, bắt đầu xử lý...")
+
         try:
+            # --- Bước 1: Lấy dữ liệu ảnh (từ URL hoặc upload) ---
+            image_bytes = None
             if image_url:
                 print(f" -> Tải ảnh từ URL: {image_url}")
-                response = requests.post(API_ENDPOINT, data={"image_url": image_url}, timeout=15)
+                headers = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(image_url, headers=headers, timeout=10)
                 response.raise_for_status()
-            else: # image is present
-                print(f" -> Tải ảnh từ file: {image.filename}")
+                image_bytes = response.content
+            elif image:
+                print(f" -> Đọc ảnh từ file: {image.filename}")
                 image_bytes = await image.read()
-                content_type = image.content_type or "image/png"
-                filename = image.filename or "image.png"
 
-                files = {
-                    "file": (filename, image_bytes, content_type)
-                }
-                response = requests.post(
-                    API_ENDPOINT,
-                    files=files,
-                    timeout=15
-                )
-                response.raise_for_status()
+            if not image_bytes:
+                raise ValueError("Không tải được dữ liệu ảnh.")
 
+            # --- Bước 2: Phân tích ảnh bằng AI Vision ---
+            print(" -> Phân tích nội dung ảnh bằng AI Vision...")
+            image_description = analyze_image_with_vision(
+                image_url=image_url,
+                image_bytes=image_bytes,
+                api_key=api_key
+            )
 
-            result = response.json()
-
-            if "embedding" in result:
-                embedding_vector = result["embedding"]
-                print(" -> Tạo embedding cho ảnh thành công.")
-            else:
-                print(" -> Lỗi từ API:", result.get("error", "Không rõ lỗi"))
-
-            if embedding_vector:
-                retrieved_data = search_products_by_image(sanitized_customer_id, embedding_vector)
-                if retrieved_data:
-                    if not user_query:
-                        user_query = "Ảnh này là sản phẩm gì vậy shop?"
-
-                    response_text = generate_llm_response(
-                        user_query=user_query,
-                        search_results=retrieved_data,
-                        history=history,
-                        model_choice=model_choice,
-                        is_image_search=True,
-                        api_key=api_key,
-                        db=db,
-                        customer_id=customer_id,
-                        is_sale=is_sale_customer
-                    )
-                    
-                    _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
-                    final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
-                    return ChatResponse(reply=response_text, history=final_history, human_handover_required=False)
-
-            print(" -> Không tìm thấy sản phẩm qua embedding, thử phân tích bằng AI Vision...")
-            image_bytes_for_vision = image_bytes
-            image_description = analyze_image_with_vision(image_url=image_url, image_bytes=image_bytes_for_vision, api_key=api_key)
+            # --- Bước 3: Nếu AI Vision có mô tả, dùng làm câu hỏi ---
             if image_description:
                 user_query = image_description
                 print(f" -> AI Vision mô tả: {user_query}")
+
+                response_text = generate_llm_response(
+                    user_query=user_query,
+                    search_results=None,
+                    history=history,
+                    model_choice=model_choice,
+                    is_image_search=True,
+                    api_key=api_key,
+                    db=db,
+                    customer_id=customer_id,
+                    is_sale=is_sale_customer
+                )
+
+                _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
+                final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
+                return ChatResponse(reply=response_text, history=final_history, human_handover_required=False)
+
+            # --- Bước 4: Nếu AI Vision không nhận diện được ---
             else:
-                response_text = "Dạ, em chưa nhận ra sản phẩm hoặc nội dung trong ảnh ạ. Anh/chị có thể cho em thêm thông tin được không?"
+                response_text = "Dạ, em chưa nhận ra sản phẩm hoặc nội dung trong ảnh ạ. Anh/chị có thể nói rõ hơn giúp em được không?"
                 _update_chat_history(db, customer_id, session_id, user_query, response_text, session_data)
                 final_history = _format_db_history(get_chat_history(db, customer_id, session_id, limit=50))
                 return ChatResponse(reply=response_text, history=final_history)
 
         except Exception as e:
-            print(f"Lỗi nghiêm trọng trong luồng xử lý ảnh: {e}")
+            print(f"❌ Lỗi khi xử lý ảnh: {e}")
             return ChatResponse(reply="Dạ, em xin lỗi, em chưa xem được hình ảnh của mình ạ.", history=history)
+
     
     analysis_result = analyze_intent_and_extract_entities(user_query, history, model_choice, api_key=api_key)
     print(f"🔍 Intent Analysis Result: {analysis_result}")
