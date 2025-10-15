@@ -11,6 +11,31 @@ from src.models.schemas import SystemPromptResponse, SystemPromptUpdate
 
 prompt_router = APIRouter()
 
+# === GENERAL PROMPT ENDPOINTS (ADMIN CHỈNH) ===
+
+@prompt_router.get("/general-prompt", response_model=SystemPromptResponse, summary="Get General System Prompt (Admin)")
+def get_general_prompt(db: Session = Depends(get_db)):
+    """
+    Lấy general prompt (quy tắc 1-3) - chỉ admin mới chỉnh được.
+    """
+    prompt_content = get_or_create_general_prompt(db)
+    if not prompt_content:
+        raise HTTPException(status_code=404, detail="General prompt not found and could not be created.")
+    return SystemPromptResponse(prompt_content=prompt_content)
+
+@prompt_router.put("/general-prompt", response_model=SystemPromptResponse, summary="Update General System Prompt (Admin)")
+def update_general_prompt_endpoint(
+    prompt_data: SystemPromptUpdate = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Cập nhật general prompt (quy tắc 1-3) - chỉ admin mới chỉnh được.
+    """
+    updated_prompt = update_general_prompt(db, prompt_data.prompt_content)
+    if not updated_prompt:
+        raise HTTPException(status_code=500, detail="Failed to update the general prompt.")
+    return SystemPromptResponse(prompt_content=updated_prompt.prompt_content)
+
 @prompt_router.get("/prompts/{customer_id}", response_model=SystemPromptResponse, summary="Get Customer System Prompt (Customer chỉnh)")
 def get_prompt(
     customer_id: str = Path(..., description="The ID of the customer"),
@@ -39,31 +64,6 @@ def update_prompt(
     updated_prompt = update_system_prompt(db, customer_id, prompt_data.prompt_content)
     if not updated_prompt:
         raise HTTPException(status_code=500, detail="Failed to update the prompt.")
-    return SystemPromptResponse(prompt_content=updated_prompt.prompt_content)
-
-# === GENERAL PROMPT ENDPOINTS (ADMIN CHỈNH) ===
-
-@prompt_router.get("/general-prompt", response_model=SystemPromptResponse, summary="Get General System Prompt (Admin)")
-def get_general_prompt(db: Session = Depends(get_db)):
-    """
-    Lấy general prompt (quy tắc 1-3) - chỉ admin mới chỉnh được.
-    """
-    prompt_content = get_or_create_general_prompt(db)
-    if not prompt_content:
-        raise HTTPException(status_code=404, detail="General prompt not found and could not be created.")
-    return SystemPromptResponse(prompt_content=prompt_content)
-
-@prompt_router.put("/general-prompt", response_model=SystemPromptResponse, summary="Update General System Prompt (Admin)")
-def update_general_prompt_endpoint(
-    prompt_data: SystemPromptUpdate = Body(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Cập nhật general prompt (quy tắc 1-3) - chỉ admin mới chỉnh được.
-    """
-    updated_prompt = update_general_prompt(db, prompt_data.prompt_content)
-    if not updated_prompt:
-        raise HTTPException(status_code=500, detail="Failed to update the general prompt.")
     return SystemPromptResponse(prompt_content=updated_prompt.prompt_content)
 
 # === COMBINED PROMPT ENDPOINT ===

@@ -103,11 +103,11 @@ def session_timeout_scanner():
 
 
 app.include_router(upload_data_routes.router, tags=["Upload Data"])
+app.include_router(prompt_router, tags=["System Prompts"])
 app.include_router(info_store_routes.router, tags=["Info Store"])
 app.include_router(customer_is_sale_routes.router)
 app.include_router(settings_routes.router, tags=["Chatbot Settings"])
 app.include_router(order_router)
-app.include_router(prompt_router, tags=["System Prompts"])
 
 @app.post("/chat/{customer_id}", summary="Gửi tin nhắn đến chatbot (hỗ trợ cả ảnh)")
 async def chat(
