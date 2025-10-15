@@ -281,7 +281,7 @@ async def chat_endpoint(
 
             # --- Bước 2: Phân tích ảnh bằng AI Vision ---
             print(" -> Phân tích nội dung ảnh bằng AI Vision...")
-            image_description = analyze_image_with_vision(
+            image_description = await analyze_image_with_vision(
                 image_url=image_url,
                 image_bytes=image_bytes,
                 api_key=api_key

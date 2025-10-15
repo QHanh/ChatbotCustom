@@ -1,5 +1,6 @@
 import os
 import requests
+import asyncio
 from src.config.settings import LMSTUDIO_API_URL, LMSTUDIO_MODEL
 from typing import Optional
 import io
@@ -13,10 +14,8 @@ def get_gemini_model(is_vision: bool = False, api_key: str = None):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        if is_vision:
-            model = genai.GenerativeModel('gemini-2.0-flash')
-        else:
-            model = genai.GenerativeModel('gemini-2.0-flash')
+        model_name = 'gemini-2.0-flash'
+        model = genai.GenerativeModel(model_name)
         return model
     except Exception as e:
         print(f"Lỗi khi khởi tạo Gemini: {e}")
@@ -46,9 +45,14 @@ def get_lmstudio_response(prompt: str):
         print(f"Lỗi khi gọi LM Studio: {e}")
         return None
 
-def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, api_key: str = None) -> Optional[str]:
+def _blocking_generate_content(model, prompt: str, image: Image.Image) -> str:
+    """Hàm đồng bộ để chạy generate_content trong một luồng riêng."""
+    response = model.generate_content([prompt, image])
+    return response.text.strip()
+
+async def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, api_key: str = None) -> Optional[str]:
     """
-    Sử dụng Gemini Pro Vision để phân tích và mô tả nội dung của một hình ảnh.
+    Sử dụng Gemini Pro Vision để phân tích và mô tả nội dung của một hình ảnh (bất đồng bộ).
     """
     try:
         model = get_gemini_model(is_vision=True, api_key=api_key)
@@ -56,11 +60,17 @@ def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, 
             print("Không thể khởi tạo model Gemini Vision.")
             return None
 
-        if not image_bytes and image_url:
-            print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
-            response = requests.get(image_url, timeout=15)
-            response.raise_for_status()
-            image_bytes = response.content
+        # Ưu tiên sử dụng image_bytes nếu có sẵn
+        if not image_bytes:
+            if image_url:
+                print(f" -> Tải ảnh từ URL để phân tích: {image_url}")
+                # Sử dụng aiohttp hoặc chạy requests trong thread để không block
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, lambda: requests.get(image_url, timeout=15))
+                response.raise_for_status()
+                image_bytes = response.content
+            else:
+                return None # Không có nguồn ảnh
         
         if not image_bytes:
             return None
@@ -69,10 +79,11 @@ def analyze_image_with_vision(image_url: str = None, image_bytes: bytes = None, 
 
         prompt = "Hãy mô tả ngắn gọn nội dung và mục đích của hình ảnh này bằng tiếng Việt. Tập trung vào việc xác định xem nó là sản phẩm, hóa đơn, biên lai chuyển khoản, hay một đoạn chat. Chỉ trả về nội dung mô tả kèm theo câu 'Khách hàng gửi một hình ảnh mô tả ...' ở đầu, không thêm lời chào."
         
-        print(" -> Gửi ảnh và prompt đến Gemini Vision...")
-        response = model.generate_content([prompt, image])
+        print(" -> Gửi ảnh và prompt đến Gemini Vision (async)...")
         
-        description = response.text.strip()
+        # Chạy hàm blocking trong một luồng riêng
+        description = await asyncio.to_thread(_blocking_generate_content, model, prompt, image)
+        
         return description
 
     except Exception as e:
